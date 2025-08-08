@@ -23,14 +23,23 @@ db.serialize(() => {
     }
 
     if (row) {
-      // The pdfs table exists, let's check if it has the right foreign key setup
-      db.all("PRAGMA foreign_key_list(pdfs)", (fkErr, fkRows) => {
-        if (fkErr) {
-          console.error("Failed to inspect foreign keys:", fkErr);
+      // The pdfs table exists, let's check if it has the file_content column
+      db.all("PRAGMA table_info(pdfs)", (infoErr, infoRows) => {
+        if (infoErr) {
+          console.error("Failed to inspect table structure:", infoErr);
           return;
         }
 
-        const hasCascade = fkRows.some(row => row.on_delete.toUpperCase() === 'CASCADE');
+        const hasFileContent = infoRows.some(col => col.name === 'file_content');
+        const hasCascade = infoRows.some(row => row.on_delete && row.on_delete.toUpperCase() === 'CASCADE');
+        
+        if (!hasFileContent) {
+          console.log("Adding file_content column to 'pdfs' table...");
+          
+          db.run(`ALTER TABLE pdfs ADD COLUMN file_content BLOB`);
+          console.log("Added file_content column to 'pdfs' table.");
+        }
+        
         if (!hasCascade) {
           console.log("Migrating 'pdfs' table to support ON DELETE CASCADE...");
 
@@ -40,41 +49,52 @@ db.serialize(() => {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id INTEGER,
                 filename TEXT,
-                filepath TEXT,
+                filepath TEXT DEFAULT NULL,
                 uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 mimetype TEXT,
+                file_content BLOB,
                 FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
               )
             `);
 
             db.run(`
-              INSERT INTO pdfs_temp (id, chat_id, filename, filepath, uploaded_at, mimetype)
-              SELECT id, chat_id, filename, filepath, uploaded_at, mimetype FROM pdfs
+              INSERT INTO pdfs_temp (id, chat_id, filename, filepath, uploaded_at, mimetype, file_content)
+              SELECT id, chat_id, filename, filepath, uploaded_at, mimetype, file_content FROM pdfs
             `);
 
             db.run(`DROP TABLE pdfs`);
             db.run(`ALTER TABLE pdfs_temp RENAME TO pdfs`);
 
-            console.log("Migration completed: 'pdfs' now uses ON DELETE CASCADE.");
+            console.log("Migration completed: 'pdfs' now uses ON DELETE CASCADE and has file_content column.");
           });
         } else {
-          console.log("'pdfs' table already has ON DELETE CASCADE.");
+          console.log("'pdfs' table already has ON DELETE CASCADE and file_content column.");
         }
+        
+        // Clean up old filepath references for records that don't have file_content
+        db.run(`UPDATE pdfs SET filepath = NULL WHERE file_content IS NULL AND filepath IS NOT NULL`, function(err) {
+          if (err) {
+            console.error("Failed to clean up old filepath references:", err);
+          } else {
+            console.log("Cleaned up old filepath references for records without file_content.");
+          }
+        });
       });
     } else {
-      // Create the pdfs table with ON DELETE CASCADE
+      // Create the pdfs table with file_content BLOB and ON DELETE CASCADE
       db.run(`
         CREATE TABLE pdfs (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           chat_id INTEGER,
           filename TEXT,
-          filepath TEXT,
+          filepath TEXT DEFAULT NULL,
           uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           mimetype TEXT,
+          file_content BLOB,
           FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
         )
       `);
-      console.log("'pdfs' table created with ON DELETE CASCADE.");
+      console.log("'pdfs' table created with file_content BLOB and ON DELETE CASCADE.");
     }
   });
 });

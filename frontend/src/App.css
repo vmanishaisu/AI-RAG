@@ -1163,11 +1163,11 @@ input:checked + .slider:before {
 }
 
 .dark .style-btn.active {
-  background: var(--primary-color);
+  background: var(--secondary-color);
   color: white;
-  border-color: var(--primary-color);
 }
 
+/* Infographic Styles */
 .infographic-image-container {
   position: relative;
   border-radius: 0.5rem;
@@ -1187,6 +1187,7 @@ input:checked + .slider:before {
   display: block;
   border-radius: 0.5rem;
   transition: all 0.2s;
+  cursor: pointer;
 }
 
 .infographic-image:hover {

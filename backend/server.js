@@ -12,9 +12,8 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const UPLOAD_DIR = path.join(__dirname, 'temp_uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
 const storage = multer.diskStorage({
@@ -22,6 +21,28 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
 });
 const upload = multer({ storage });
+
+// Cleanup function to remove temporary files
+const cleanupTempFiles = () => {
+  try {
+    if (fs.existsSync(UPLOAD_DIR)) {
+      const files = fs.readdirSync(UPLOAD_DIR);
+      files.forEach(file => {
+        const filePath = path.join(UPLOAD_DIR, file);
+        const stats = fs.statSync(filePath);
+        // Remove files older than 1 hour
+        if (Date.now() - stats.mtime.getTime() > 3600000) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Cleanup error:', err);
+  }
+};
+
+// Run cleanup every hour
+setInterval(cleanupTempFiles, 3600000);
 
 let dynamicOpenAIKey = process.env.OPENAI_API_KEY;
 
@@ -80,6 +101,7 @@ app.post('/upload/:chatId', upload.single('file'), (req, res) => {
   const chatId = req.params.chatId;
   const file = req.file;
   if (!file) return res.status(400).send('No file uploaded');
+  
   // Make sure the chat exists before saving the file
   db.get('SELECT id FROM chats WHERE id = ?', [chatId], (err, row) => {
     if (err) {
@@ -89,14 +111,27 @@ app.post('/upload/:chatId', upload.single('file'), (req, res) => {
     if (!row) {
       return res.status(400).send('Chat does not exist');
     }
+    
+    // Read the file content into a buffer
+    const fileBuffer = fs.readFileSync(file.path);
+    
+    // Store file content directly in database
     db.run(
-      `INSERT INTO pdfs (chat_id, filename, filepath, mimetype) VALUES (?, ?, ?, ?)`,
-      [chatId, file.originalname, file.path, file.mimetype],
+      `INSERT INTO pdfs (chat_id, filename, mimetype, file_content) VALUES (?, ?, ?, ?)`,
+      [chatId, file.originalname, file.mimetype, fileBuffer],
       function (err) {
         if (err) {
           console.error(err);
           return res.status(500).send('Database error');
         }
+        
+        // Delete the temporary file from disk
+        try {
+          fs.unlinkSync(file.path);
+        } catch (e) {
+          console.error('Failed to delete temporary file:', e);
+        }
+        
         res.json({ id: this.lastID, filename: file.originalname });
       }
     );
@@ -106,12 +141,44 @@ app.post('/upload/:chatId', upload.single('file'), (req, res) => {
 // Retrieve all PDFs for a specific chat
 app.get('/chats/:chatId/pdfs', (req, res) => {
   const chatId = req.params.chatId;
-  db.all(`SELECT * FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC`, [chatId], (err, rows) => {
+  db.all(`SELECT id, filename, mimetype, uploaded_at FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC`, [chatId], (err, rows) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Database error');
     }
     res.json(rows);
+  });
+});
+
+// Download a specific file from the database
+app.get('/files/:fileId/download', (req, res) => {
+  const { fileId } = req.params;
+  db.get('SELECT filename, mimetype, file_content FROM pdfs WHERE id = ?', [fileId], (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Database error');
+    }
+    if (!row) return res.status(404).send('File not found');
+    
+    res.setHeader('Content-Type', row.mimetype);
+    res.setHeader('Content-Disposition', `attachment; filename="${row.filename}"`);
+    res.send(row.file_content);
+  });
+});
+
+// View a specific file in the browser
+app.get('/files/:fileId/view', (req, res) => {
+  const { fileId } = req.params;
+  db.get('SELECT filename, mimetype, file_content FROM pdfs WHERE id = ?', [fileId], (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Database error');
+    }
+    if (!row) return res.status(404).send('File not found');
+    
+    res.setHeader('Content-Type', row.mimetype);
+    res.setHeader('Content-Disposition', `inline; filename="${row.filename}"`);
+    res.send(row.file_content);
   });
 });
 
@@ -198,14 +265,14 @@ app.post('/api/ask', async (req, res) => {
     try {
       const fileRow = await new Promise((resolve, reject) => {
         db.get(
-          'SELECT filepath, mimetype FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC LIMIT 1',
+          'SELECT file_content, mimetype FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC LIMIT 1',
           [chatId],
           (err, row) => (err ? reject(err) : resolve(row))
         );
       });
 
-      if (fileRow && fileRow.filepath && fs.existsSync(fileRow.filepath)) {
-        const dataBuffer = fs.readFileSync(fileRow.filepath);
+      if (fileRow && fileRow.file_content) {
+        const dataBuffer = fileRow.file_content;
 
         if (fileRow.mimetype === 'application/pdf') {
           const pdfData = await pdf(dataBuffer);
@@ -297,21 +364,16 @@ app.post('/api/ask', async (req, res) => {
   res.json({ answer, followups });
 });
 
-// Delete a file from disk and database
+// Delete a file from database
 app.delete('/files/:fileId', (req, res) => {
   const { fileId } = req.params;
-  db.get('SELECT filepath FROM pdfs WHERE id = ?', [fileId], (err, row) => {
+  db.get('SELECT id FROM pdfs WHERE id = ?', [fileId], (err, row) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Database error');
     }
     if (!row) return res.status(404).send('File not found');
-    // Delete the file from disk
-    try {
-      if (fs.existsSync(row.filepath)) fs.unlinkSync(row.filepath);
-    } catch (e) {
-      console.error('Failed to delete file from disk:', e);
-    }
+    
     // Delete from database
     db.run('DELETE FROM pdfs WHERE id = ?', [fileId], function (err2) {
       if (err2) {
@@ -337,13 +399,13 @@ app.post('/api/generate-infographic', async (req, res) => {
     // Get the most recent PDF from the chat
     const fileRow = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT filepath, mimetype FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC LIMIT 1',
+        'SELECT file_content, mimetype FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC LIMIT 1',
         [chatId],
         (err, row) => (err ? reject(err) : resolve(row))
       );
     });
 
-    if (!fileRow || !fileRow.filepath || !fs.existsSync(fileRow.filepath)) {
+    if (!fileRow || !fileRow.file_content) {
       return res.status(400).json({ error: 'No PDF file found in this chat' });
     }
 
@@ -352,7 +414,7 @@ app.post('/api/generate-infographic', async (req, res) => {
     }
 
     // Extract text from PDF
-    const dataBuffer = fs.readFileSync(fileRow.filepath);
+    const dataBuffer = fileRow.file_content;
     const pdfData = await pdf(dataBuffer);
     pdfText = pdfData.text;
 

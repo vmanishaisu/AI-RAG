@@ -619,7 +619,7 @@ function App() {
                     {pdfsByChat[chat.id].map(pdf => (
                       <li key={pdf.id} className="sidebar-pdf-row" style={{ position: 'relative' }}>
                         <a
-                          href={`http://localhost:5000/uploads/${encodeURIComponent(pdf.filepath.split(/[/\\]/).pop())}`}
+                          href={`http://localhost:5000/files/${pdf.id}/view`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="sidebar-pdf-link"
@@ -993,6 +993,7 @@ function App() {
           </div>
         </div>
       )}
+      
     </div>
   );
 }
