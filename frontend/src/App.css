@@ -930,6 +930,27 @@ input:checked + .slider:before {
   background: #4b5563;
 }
 
+/* Empty Chat Placeholder */
+.empty-chat-placeholder {
+  text-align: center;
+  margin-top: 2rem;
+  padding: 2rem;
+  color: var(--text-light);
+  font-size: 1.1rem;
+  font-style: italic;
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.dark .empty-chat-placeholder {
+  color: var(--text-dark);
+  opacity: 0.7;
+}
+
+.empty-chat-placeholder:hover {
+  opacity: 1;
+}
+
 .file-menu-trigger {
   background: none;
   border: none;

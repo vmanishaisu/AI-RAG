@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperclip, faTrash, faGear, faImage } from "@fortawesome/free-solid-svg-icons";
+import { faPaperclip, faTrash, faGear, faImage, faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 
 function App() {
   const [chats, setChats] = useState([]);
@@ -26,11 +26,30 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
-  const [followups, setFollowups] = useState([]);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [followupsByChat, setFollowupsByChat] = useState({});
   const [generatingInfographic, setGeneratingInfographic] = useState(false);
   const [infographicUrl, setInfographicUrl] = useState(null);
   const [alternativeInfographicUrl, setAlternativeInfographicUrl] = useState(null);
   const [selectedInfographic, setSelectedInfographic] = useState('primary');
+  const [greetingMessage, setGreetingMessage] = useState("");
+
+  // Generate random placeholder messages for empty chats
+  const getRandomPlaceholder = () => {
+    const placeholders = [
+      "Hi! 👋 What's on your mind today?",
+      "Ask me anything about your documents! 📚",
+      "Ready to explore your PDFs? 🔍",
+      "What would you like to know? 🤔",
+      "Upload a PDF and let's dive in! 📄",
+      "Curious about something? Just ask! 💭",
+      "I'm here to help with your research! 🧠",
+      "What questions do you have? ❓",
+      "Let's analyze your documents together! 📊",
+      "Ready to discover insights? 💡"
+    ];
+    return placeholders[Math.floor(Math.random() * placeholders.length)];
+  };
 
   const activeChat = activeChatIndex !== null ? chats[activeChatIndex] : null;
 
@@ -53,6 +72,8 @@ function App() {
 
   useEffect(() => {
     fetchChats();
+    // Initialize greeting message once when component mounts
+    setGreetingMessage(getRandomPlaceholder());
   }, []);
 
   useEffect(() => {
@@ -63,18 +84,39 @@ function App() {
 
   useEffect(() => {
     if (!activeChat || !Array.isArray(activeChat.messages) || activeChat.messages.length === 0) {
-      setFollowups([]);
+      setFollowupsByChat(prev => {
+        const newState = { ...prev };
+        if (activeChat) {
+          delete newState[activeChat.id];
+        }
+        return newState;
+      });
     }
   }, [activeChat]);
 
-  const fetchChats = async () => {
+  const fetchChats = async (preserveActiveChat = false) => {
     setChatsLoading(true);
     setError("");
     try {
       const res = await fetch("http://localhost:5000/chats");
       if (!res.ok) throw new Error("Failed to load chats");
       const data = await res.json();
+      
+      // If we need to preserve the active chat, find the current active chat ID
+      let activeChatId = null;
+      if (preserveActiveChat && activeChatIndex !== null && chats[activeChatIndex]) {
+        activeChatId = chats[activeChatIndex].id;
+      }
+      
       setChats(data);
+      
+      // If we need to preserve the active chat, find the new index
+      if (preserveActiveChat && activeChatId) {
+        const newActiveIndex = data.findIndex(chat => chat.id === activeChatId);
+        if (newActiveIndex !== -1) {
+          setActiveChatIndex(newActiveIndex);
+        }
+      }
 
       // Download the list of PDFs for every chat and store them in state
       const pdfsMap = {};
@@ -114,7 +156,7 @@ function App() {
         const res = await fetch("http://localhost:5000/chats", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: "Untitled" }),
+          body: JSON.stringify({ title: "New Chat" }),
         });
         if (!res.ok) throw new Error("Failed to create chat");
         const newChat = await res.json();
@@ -158,6 +200,8 @@ function App() {
       });
       if (!res.ok) throw new Error("Failed to get answer from OpenAI");
       const data = await res.json();
+      
+      // Update messages first
       setChats((prevChats) => {
         const chatsCopy = [...prevChats];
         const chatIdx = chatsCopy.findIndex((c) => c.id === chatId);
@@ -166,15 +210,24 @@ function App() {
         }
         return chatsCopy;
       });
-      setFollowups(data.followups || []);
+      
+      setFollowupsByChat(prev => ({
+        ...prev,
+        [chatId]: data.followups || []
+      }));
+      
       // Save the updated messages to the backend after getting a response
-      setTimeout(() => {
-        setChats((prevChats) => {
-          const chat = prevChats.find((c) => c.id === chatId);
-          if (chat) saveMessages(chatId, chat.messages);
-          return prevChats;
-        });
-      }, 0);
+      // Use functional update to get the most current state
+      setChats((prevChats) => {
+        const currentChat = prevChats.find(c => c.id === chatId);
+        if (currentChat) {
+          const updatedMessages = [...currentChat.messages];
+          updatedMessages[assistantMsgIndex] = { role: "assistant", content: data.answer };
+          // Save messages with the updated state
+          saveMessages(chatId, updatedMessages);
+        }
+        return prevChats;
+      });
     } catch (err) {
       setChats((prevChats) => {
         const chatsCopy = [...prevChats];
@@ -184,7 +237,10 @@ function App() {
         }
         return chatsCopy;
       });
-      setFollowups([]);
+      setFollowupsByChat(prev => ({
+        ...prev,
+        [chatId]: []
+      }));
     }
   };
 
@@ -195,9 +251,27 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages }),
       });
-      if (!res.ok) throw new Error("Failed to save messages");
+                  if (!res.ok) throw new Error("Failed to save messages");
+            
+            const responseData = await res.json();
+            
+            // Update the chat title immediately if it was changed
+            if (responseData.success && responseData.title) {
+              setChats(prevChats => {
+                const updatedChats = prevChats.map(chat => {
+                  if (chat.id === chatId) {
+                    return { ...chat, title: responseData.title };
+                  }
+                  return chat;
+                });
+                return updatedChats;
+              });
+            }
+      
+      return true;
     } catch (err) {
       setError("Failed to save messages");
+      return false;
     }
   };
 
@@ -206,7 +280,7 @@ function App() {
       const res = await fetch("http://localhost:5000/chats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Untitled" }),
+        body: JSON.stringify({ title: "New Chat" }),
       });
       if (!res.ok) throw new Error("Failed to create chat");
       const newChat = await res.json();
@@ -216,7 +290,12 @@ function App() {
         return newChats;
       });
       setInput("");
-      setFollowups([]);
+      setFollowupsByChat(prev => ({
+        ...prev,
+        [newChat.id]: []
+      }));
+      // Generate a new greeting for the new chat
+      setGreetingMessage(getRandomPlaceholder());
     } catch (err) {
       setError("Failed to create new chat");
     }
@@ -244,6 +323,13 @@ function App() {
       if (!res.ok) throw new Error("Upload failed");
       const uploadedFile = await res.json();
       setUploadMessage(""); // Clear "Uploading..." message on success
+
+      // Update chat title if it was changed by the backend
+      if (uploadedFile.title && uploadedFile.title !== activeChat.title) {
+        setChats(prevChats => prevChats.map(chat => 
+          chat.id === activeChat.id ? { ...chat, title: uploadedFile.title } : chat
+        ));
+      }
 
       //  Create a file message
       const fileMessage = {
@@ -277,7 +363,6 @@ function App() {
         setPdfsByChat(prev => ({ ...prev, [activeChat.id]: pdfs }));
       }
     } catch (err) {
-      console.error(err); 
       setUploadMessage("❌ Upload failed. Please try again.");
     } finally {
       // Reset the file input so the same file can be uploaded again
@@ -468,7 +553,6 @@ function App() {
       // Show success message
       setError(""); // Clear any previous errors
     } catch (err) {
-      console.error('Infographic generation error:', err);
       setError(`Failed to generate high-resolution infographic: ${err.message}. Please ensure your OpenAI API key is valid and has sufficient credits.`);
     } finally {
       setGeneratingInfographic(false);
@@ -494,10 +578,11 @@ function App() {
       window.URL.revokeObjectURL(url);
       
     } catch (error) {
-      console.error('Error downloading infographic:', error);
       setError('Failed to download infographic. Please try again.');
     }
   };
+
+
 
   return (
     <div className="app">
@@ -556,7 +641,6 @@ function App() {
                 className={`chat-history-item ${index === activeChatIndex ? "active" : ""}`}
                 onClick={() => {
                   setActiveChatIndex(index);
-                  setFollowups([]);
                 }}
               >
                 <div className="chat-item-header">
@@ -821,15 +905,15 @@ function App() {
               );
             })
           ) : (
-            <div style={{ textAlign: "center", marginTop: "2rem" }}>
-              No messages yet.
+            <div className="empty-chat-placeholder">
+              {greetingMessage}
             </div>
           )}
-          {followups.length > 0 && (
+          {activeChat && followupsByChat[activeChat.id] && followupsByChat[activeChat.id].length > 0 && (
             <div style={{ marginTop: 24 }}>
               <div style={{ fontWeight: 500, marginBottom: 8 }}>AI Follow-up Suggestions:</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {followups.map((q, i) => (
+                {followupsByChat[activeChat.id].map((q, i) => (
                   <button
                     key={i}
                     style={{
@@ -946,51 +1030,119 @@ function App() {
         </div>
       )}
       {showSettings && (
-        <div className="modal-overlay" style={{ zIndex: 300 }}>
-          <div className="modal-content">
-            <h3>OpenAI API Key</h3>
+        <div 
+          style={{ 
+            position: "absolute", 
+            bottom: "4rem", 
+            left: "1rem", 
+            zIndex: 300,
+            background: darkMode ? "var(--sidebar-dark)" : "white",
+            border: `1px solid ${darkMode ? "var(--border-dark)" : "#e5e7eb"}`,
+            borderRadius: "8px",
+            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
+            padding: "1rem",
+            minWidth: "280px",
+            maxWidth: "350px"
+          }}
+        >
+          <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem" }}>🔑 OpenAI API Key</h3>
+          <div style={{ position: "relative", marginBottom: "1rem" }}>
             <input
-              type="password"
+              type={showApiKey ? "text" : "password"}
               autoComplete="off"
               name="openai-api-key-unique-2024"
               value={apiKeyInput}
               onChange={e => setApiKeyInput(e.target.value)}
               placeholder="Enter your OpenAI API key"
-              style={{ width: "100%", marginBottom: 16, padding: 8 }}
+              style={{ 
+                width: "100%", 
+                padding: "8px 40px 8px 8px", 
+                border: "1px solid #d1d5db",
+                borderRadius: "4px",
+                fontSize: "14px"
+              }}
               autoFocus
             />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => setShowSettings(false)}>Cancel</button>
-              <button
-                onClick={async () => {
-                  setApiKeyStatus("");
-                  try {
-                    const res = await fetch("http://localhost:5000/api/set-openai-key", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ apikey: apiKeyInput }),
-                    });
-                    if (!res.ok) {
-                      let msg = "Failed to set API key";
-                      try {
-                        const err = await res.json();
-                        if (err && err.error) msg = err.error;
-                      } catch {}
-                      throw new Error(msg);
-                    }
-                    setApiKeyStatus("API key saved!");
-                    setShowSettings(false);
-                  } catch (e) {
-                    setApiKeyStatus(e.message || "Failed to save API key.");
-                  }
-                }}
-                style={{ background: "#2563eb", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 4 }}
-              >
-                Save
-              </button>
-            </div>
-            {apiKeyStatus && <div style={{ marginTop: 12, color: apiKeyStatus.includes("Failed") ? "#ef4444" : "#22c55e" }}>{apiKeyStatus}</div>}
+            <button
+              type="button"
+              onClick={() => setShowApiKey(!showApiKey)}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "#6b7280",
+                padding: "4px"
+              }}
+            >
+              <FontAwesomeIcon icon={showApiKey ? faEyeSlash : faEye} />
+            </button>
           </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginBottom: "1rem" }}>
+            <button 
+              onClick={() => setShowSettings(false)}
+              style={{ 
+                padding: "6px 12px", 
+                border: "1px solid #d1d5db", 
+                borderRadius: "4px", 
+                background: "#fff",
+                cursor: "pointer",
+                fontSize: "14px"
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                setApiKeyStatus("");
+                try {
+                  const res = await fetch("http://localhost:5000/api/set-openai-key", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ apikey: apiKeyInput }),
+                  });
+                  if (!res.ok) {
+                    let msg = "Failed to set API key";
+                    try {
+                      const err = await res.json();
+                      if (err && err.error) msg = err.error;
+                    } catch {}
+                    throw new Error(msg);
+                  }
+                  setApiKeyStatus("✅ API key saved!");
+                  setTimeout(() => setShowSettings(false), 1000);
+                } catch (e) {
+                  setApiKeyStatus("❌ " + (e.message || "Failed to save API key."));
+                }
+              }}
+              style={{ 
+                background: "#2563eb", 
+                color: "#fff", 
+                border: "none", 
+                padding: "6px 12px", 
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "14px"
+              }}
+            >
+              Save
+            </button>
+          </div>
+          {apiKeyStatus && (
+            <div style={{ 
+              marginTop: "8px", 
+              color: apiKeyStatus.includes("❌") ? "#ef4444" : "#22c55e",
+              fontSize: "12px",
+              textAlign: "center"
+            }}>
+              {apiKeyStatus}
+            </div>
+          )}
+          
+
         </div>
       )}
       
