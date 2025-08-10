@@ -37,7 +37,7 @@ const cleanupTempFiles = () => {
       });
     }
   } catch (err) {
-    console.error('Cleanup error:', err);
+    // Cleanup error
   }
 };
 
@@ -46,11 +46,16 @@ setInterval(cleanupTempFiles, 3600000);
 
 let dynamicOpenAIKey = process.env.OPENAI_API_KEY;
 
+// Initialize OpenAI client
+let openai = null;
+if (dynamicOpenAIKey) {
+  openai = new OpenAI({ apiKey: dynamicOpenAIKey });
+}
+
 // Retrieve all chats from the database, ordered by most recent
 app.get('/chats', (req, res) => {
   db.all(`SELECT * FROM chats ORDER BY id DESC`, (err, rows) => {
     if (err) {
-      console.error(err);
       return res.status(500).send('Database error');
     }
     // Parse the messages field for each chat, handling errors gracefully
@@ -71,44 +76,147 @@ app.get('/chats', (req, res) => {
 // Create a new chat with a title and empty messages
 app.post('/chats', (req, res) => {
   const { title } = req.body;
-  db.run(`INSERT INTO chats (title, messages) VALUES (?, ?)`, [title || 'Untitled', '[]'], function (err) {
+  db.run(`INSERT INTO chats (title, messages) VALUES (?, ?)`, [title || 'New Chat', '[]'], function (err) {
     if (err) {
-      console.error(err);
       return res.status(500).send('Failed to create chat');
     }
-    res.json({ id: this.lastID, title: title || 'Untitled', messages: [] });
+    res.json({ id: this.lastID, title: title || 'New Chat', messages: [] });
   });
 });
 
-// Save the messages array for a specific chat
-app.post('/chats/:chatId/messages', (req, res) => {
+// Save the messages array for a specific chat and update title if needed
+app.post('/chats/:chatId/messages', async (req, res) => {
   const { chatId } = req.params;
   const { messages } = req.body;
   if (!Array.isArray(messages)) {
     return res.status(400).send('Messages must be an array');
   }
-  db.run(`UPDATE chats SET messages = ? WHERE id = ?`, [JSON.stringify(messages), chatId], function (err) {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Failed to save messages');
+  
+  try {
+    // Update messages
+    await new Promise((resolve, reject) => {
+      db.run(`UPDATE chats SET messages = ? WHERE id = ?`, [JSON.stringify(messages), chatId], function (err) {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Generate dynamic title if this is a new chat or if title is still "Untitled"
+    const chatRow = await new Promise((resolve, reject) => {
+      db.get('SELECT title FROM chats WHERE id = ?', [chatId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    let updatedTitle = chatRow?.title;
+    
+    if (chatRow && (chatRow.title === 'Untitled' || chatRow.title === 'New Chat')) {
+      // Generate title based on the first user message or uploaded file
+      const userMessages = messages.filter(msg => msg.role === 'user');
+      let titleSource = '';
+      
+      if (userMessages.length > 0) {
+        titleSource = userMessages[0].content;
+      } else {
+        // No text messages, check for uploaded files
+        const fileRow = await new Promise((resolve, reject) => {
+          db.get('SELECT filename, mimetype FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC LIMIT 1', [chatId], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          });
+        });
+        
+        if (fileRow) {
+          titleSource = `Document: ${fileRow.filename}`;
+        }
+      }
+      
+      if (titleSource) {
+        if (openai) {
+          try {
+            const titleResponse = await openai.chat.completions.create({
+              model: 'gpt-3.5-turbo',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'Generate a short, descriptive title (3-8 words) for a chat based on the user\'s first question or uploaded document. The title should be concise and capture the main topic or intent. Return only the title, no quotes or extra text.'
+                },
+                {
+                  role: 'user',
+                  content: `Generate a title for this: "${titleSource}"`
+                }
+              ],
+              max_tokens: 20,
+              temperature: 0.7
+            });
+
+            const generatedTitle = titleResponse.choices?.[0]?.message?.content?.trim();
+            if (generatedTitle && generatedTitle.length > 0) {
+              await new Promise((resolve, reject) => {
+                db.run('UPDATE chats SET title = ? WHERE id = ?', [generatedTitle, chatId], function (err) {
+                  if (err) reject(err);
+                  else resolve();
+                });
+              });
+              updatedTitle = generatedTitle;
+            }
+          } catch (err) {
+            // Fallback: generate a simple title from the first few words
+            const words = titleSource.split(' ').slice(0, 4).join(' ');
+            const fallbackTitle = words.length > 0 ? words : 'Chat';
+            await new Promise((resolve, reject) => {
+              db.run('UPDATE chats SET title = ? WHERE id = ?', [fallbackTitle, chatId], function (err) {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+            updatedTitle = fallbackTitle;
+          }
+        } else {
+          // No OpenAI client available, use fallback title
+          const words = titleSource.split(' ').slice(0, 4).join(' ');
+          const fallbackTitle = words.length > 0 ? words : 'Chat';
+          await new Promise((resolve, reject) => {
+            db.run('UPDATE chats SET title = ? WHERE id = ?', [fallbackTitle, chatId], function (err) {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+          updatedTitle = fallbackTitle;
+        }
+      }
     }
-    res.sendStatus(200);
-  });
+
+    // Return the updated chat information
+    res.json({ 
+      success: true, 
+      chatId: chatId, 
+      title: updatedTitle,
+      messageCount: messages.length 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Failed to save messages');
+  }
 });
 
 // Upload a PDF or image file to a specific chat
-app.post('/upload/:chatId', upload.single('file'), (req, res) => {
+app.post('/upload/:chatId', upload.single('file'), async (req, res) => {
   const chatId = req.params.chatId;
   const file = req.file;
   if (!file) return res.status(400).send('No file uploaded');
   
-  // Make sure the chat exists before saving the file
-  db.get('SELECT id FROM chats WHERE id = ?', [chatId], (err, row) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Database error');
-    }
-    if (!row) {
+  try {
+    // Make sure the chat exists before saving the file
+    const chatRow = await new Promise((resolve, reject) => {
+      db.get('SELECT id, title FROM chats WHERE id = ?', [chatId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    
+    if (!chatRow) {
       return res.status(400).send('Chat does not exist');
     }
     
@@ -116,26 +224,91 @@ app.post('/upload/:chatId', upload.single('file'), (req, res) => {
     const fileBuffer = fs.readFileSync(file.path);
     
     // Store file content directly in database
-    db.run(
-      `INSERT INTO pdfs (chat_id, filename, mimetype, file_content) VALUES (?, ?, ?, ?)`,
-      [chatId, file.originalname, file.mimetype, fileBuffer],
-      function (err) {
-        if (err) {
-          console.error(err);
-          return res.status(500).send('Database error');
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO pdfs (chat_id, filename, mimetype, file_content) VALUES (?, ?, ?, ?)`,
+        [chatId, file.originalname, file.mimetype, fileBuffer],
+        function (err) {
+          if (err) reject(err);
+          else resolve();
         }
-        
-        // Delete the temporary file from disk
+      );
+    });
+    
+    // Delete the temporary file from disk
+    try {
+      fs.unlinkSync(file.path);
+    } catch (e) {
+      // Failed to delete temporary file
+    }
+    
+    // Generate title if this is a new chat with no messages yet
+    let updatedTitle = chatRow.title;
+    if (chatRow.title === 'New Chat' || chatRow.title === 'Untitled') {
+      const titleSource = `Document: ${file.originalname}`;
+      
+      if (openai) {
         try {
-          fs.unlinkSync(file.path);
-        } catch (e) {
-          console.error('Failed to delete temporary file:', e);
+          const titleResponse = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages: [
+              {
+                role: 'system',
+                content: 'Generate a short, descriptive title (3-8 words) for a chat based on the uploaded document filename. The title should be concise and capture the main topic or intent. Return only the title, no quotes or extra text.'
+              },
+              {
+                role: 'user',
+                content: `Generate a title for this document: "${titleSource}"`
+              }
+            ],
+            max_tokens: 20,
+            temperature: 0.7
+          });
+
+          const generatedTitle = titleResponse.choices?.[0]?.message?.content?.trim();
+          if (generatedTitle && generatedTitle.length > 0) {
+            await new Promise((resolve, reject) => {
+              db.run('UPDATE chats SET title = ? WHERE id = ?', [generatedTitle, chatId], function (err) {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+            updatedTitle = generatedTitle;
+          }
+        } catch (err) {
+          // Fallback: generate a simple title from the filename
+          const words = file.originalname.replace(/\.[^/.]+$/, '').split(/[\s_-]+/).slice(0, 4).join(' ');
+          const fallbackTitle = words.length > 0 ? words : 'Document Chat';
+          await new Promise((resolve, reject) => {
+            db.run('UPDATE chats SET title = ? WHERE id = ?', [fallbackTitle, chatId], function (err) {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+          updatedTitle = fallbackTitle;
         }
-        
-        res.json({ id: this.lastID, filename: file.originalname });
+      } else {
+        // No OpenAI client available, use fallback title
+        const words = file.originalname.replace(/\.[^/.]+$/, '').split(/[\s_-]+/).slice(0, 4).join(' ');
+        const fallbackTitle = words.length > 0 ? words : 'Document Chat';
+        await new Promise((resolve, reject) => {
+          db.run('UPDATE chats SET title = ? WHERE id = ?', [fallbackTitle, chatId], function (err) {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+        updatedTitle = fallbackTitle;
       }
-    );
-  });
+    }
+    
+    res.json({ 
+      id: chatId, 
+      filename: file.originalname,
+      title: updatedTitle
+    });
+  } catch (err) {
+    res.status(500).send('Failed to upload file');
+  }
 });
 
 // Retrieve all PDFs for a specific chat
@@ -143,7 +316,6 @@ app.get('/chats/:chatId/pdfs', (req, res) => {
   const chatId = req.params.chatId;
   db.all(`SELECT id, filename, mimetype, uploaded_at FROM pdfs WHERE chat_id = ? ORDER BY uploaded_at DESC`, [chatId], (err, rows) => {
     if (err) {
-      console.error(err);
       return res.status(500).send('Database error');
     }
     res.json(rows);
@@ -222,6 +394,14 @@ app.delete('/chats/:chatId', (req, res) => {
 app.post('/api/set-openai-key', (req, res) => {
   dynamicOpenAIKey = req.body.apikey;
   if (!dynamicOpenAIKey) return res.status(400).json({ error: 'API key required' });
+  
+  // Reinitialize OpenAI client with new key
+  if (dynamicOpenAIKey) {
+    openai = new OpenAI({ apiKey: dynamicOpenAIKey });
+  } else {
+    openai = null;
+  }
+  
   res.json({ success: true });
 });
 
@@ -334,7 +514,9 @@ app.post('/api/ask', async (req, res) => {
       `UPDATE chats SET messages = ? WHERE id = ?`,
       [JSON.stringify(messages), chatId],
       (err) => {
-        if (err) console.error("❌ Failed to save messages:", err);
+        if (err) {
+          // Failed to save messages
+        }
       }
     );
   }
@@ -358,7 +540,7 @@ app.post('/api/ask', async (req, res) => {
       .map(q => q.trim())
       .filter(q => q.length > 0) || [];
   } catch (err) {
-    console.error("⚠️ Follow-up question generation failed:", err.response?.data || err.message || err);
+    // Follow-up question generation failed
   }
 
   res.json({ answer, followups });
@@ -792,8 +974,86 @@ ${comparison ? `SECTION: COMPARISON\n- ${comparison}` : ''}
     });
 
   } catch (err) {
-    console.error("❌ Infographic generation error:", err.response?.data || err.message || err);
     return res.status(500).json({ error: 'Failed to generate infographic. Please try again.' });
+  }
+});
+
+// Manually regenerate titles for chats that still have "New Chat"
+app.post('/chats/regenerate-titles', async (req, res) => {
+  try {
+    const chats = await new Promise((resolve, reject) => {
+      db.all('SELECT id, title, messages FROM chats WHERE title = "New Chat"', (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+
+    for (const chat of chats) {
+      try {
+        const messages = JSON.parse(chat.messages || '[]');
+        const userMessages = messages.filter(msg => msg.role === 'user');
+        
+        if (userMessages.length > 0) {
+          const firstQuestion = userMessages[0].content;
+          
+          if (openai) {
+            try {
+              const titleResponse = await openai.chat.completions.create({
+                model: 'gpt-3.5-turbo',
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'Generate a short, descriptive title (3-8 words) for a chat based on the user\'s first question. The title should be concise and capture the main topic or intent. Return only the title, no quotes or extra text.'
+                  },
+                  {
+                    role: 'user',
+                    content: `Generate a title for this question: "${firstQuestion}"`
+                  }
+                ],
+                max_tokens: 20,
+                temperature: 0.7
+              });
+
+              const generatedTitle = titleResponse.choices?.[0]?.message?.content?.trim();
+              if (generatedTitle && generatedTitle.length > 0) {
+                await new Promise((resolve, reject) => {
+                  db.run('UPDATE chats SET title = ? WHERE id = ?', [generatedTitle, chat.id], function (err) {
+                    if (err) reject(err);
+                    else resolve();
+                  });
+                });
+              }
+            } catch (err) {
+              // Fallback title
+              const words = firstQuestion.split(' ').slice(0, 4).join(' ');
+              const fallbackTitle = words.length > 0 ? words : 'Chat';
+              await new Promise((resolve, reject) => {
+                db.run('UPDATE chats SET title = ? WHERE id = ?', [fallbackTitle, chat.id], function (err) {
+                  if (err) reject(err);
+                  else resolve();
+                });
+              });
+            }
+          } else {
+            // No OpenAI client available, use fallback title
+            const words = firstQuestion.split(' ').slice(0, 4).join(' ');
+            const fallbackTitle = words.length > 0 ? words : 'Chat';
+            await new Promise((resolve, reject) => {
+              db.run('UPDATE chats SET title = ? WHERE id = ?', [fallbackTitle, chat.id], function (err) {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+          }
+        }
+      } catch (err) {
+        // Error processing chat
+      }
+    }
+
+    res.json({ success: true, message: `Processed ${chats.length} chats` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to regenerate titles' });
   }
 });
 
