@@ -54,7 +54,7 @@ if (dynamicOpenAIKey) {
 
 // Retrieve all chats from the database, ordered by most recent
 app.get('/chats', (req, res) => {
-  db.all(`SELECT * FROM chats ORDER BY id DESC`, (err, rows) => {
+  db.all(`SELECT c.*, p.name as project_name FROM chats c LEFT JOIN projects p ON c.project_id = p.id ORDER BY c.id DESC`, (err, rows) => {
     if (err) {
       return res.status(500).send('Database error');
     }
@@ -67,7 +67,11 @@ app.get('/chats', (req, res) => {
       } catch {
         messages = [];
       }
-      return { ...row, messages };
+      return { 
+        ...row, 
+        messages,
+        project_id: row.project_id ? parseInt(row.project_id) : null
+      };
     });
     res.json(parsedRows);
   });
@@ -75,12 +79,12 @@ app.get('/chats', (req, res) => {
 
 // Create a new chat with a title and empty messages
 app.post('/chats', (req, res) => {
-  const { title } = req.body;
-  db.run(`INSERT INTO chats (title, messages) VALUES (?, ?)`, [title || 'New Chat', '[]'], function (err) {
+  const { title, project_id } = req.body;
+  db.run(`INSERT INTO chats (title, messages, project_id) VALUES (?, ?, ?)`, [title || 'New Chat', '[]', project_id || null], function (err) {
     if (err) {
       return res.status(500).send('Failed to create chat');
     }
-    res.json({ id: this.lastID, title: title || 'New Chat', messages: [] });
+    res.json({ id: this.lastID, title: title || 'New Chat', messages: [], project_id: project_id ? parseInt(project_id) : null });
   });
 });
 
@@ -196,7 +200,6 @@ app.post('/chats/:chatId/messages', async (req, res) => {
       messageCount: messages.length 
     });
   } catch (err) {
-    console.error(err);
     res.status(500).send('Failed to save messages');
   }
 });
@@ -327,7 +330,6 @@ app.get('/files/:fileId/download', (req, res) => {
   const { fileId } = req.params;
   db.get('SELECT filename, mimetype, file_content FROM pdfs WHERE id = ?', [fileId], (err, row) => {
     if (err) {
-      console.error(err);
       return res.status(500).send('Database error');
     }
     if (!row) return res.status(404).send('File not found');
@@ -343,7 +345,6 @@ app.get('/files/:fileId/view', (req, res) => {
   const { fileId } = req.params;
   db.get('SELECT filename, mimetype, file_content FROM pdfs WHERE id = ?', [fileId], (err, row) => {
     if (err) {
-      console.error(err);
       return res.status(500).send('Database error');
     }
     if (!row) return res.status(404).send('File not found');
@@ -363,7 +364,6 @@ app.put('/chats/:chatId', (req, res) => {
   }
   db.run('UPDATE chats SET title = ? WHERE id = ?', [title, chatId], function (err) {
     if (err) {
-      console.error(err);
       return res.status(500).send('Failed to rename chat');
     }
     res.sendStatus(200);
@@ -376,13 +376,11 @@ app.delete('/chats/:chatId', (req, res) => {
   // First, remove all PDFs linked to the chat
   db.run('DELETE FROM pdfs WHERE chat_id = ?', [chatId], function (err) {
     if (err) {
-      console.error(err);
       return res.status(500).send('Failed to delete PDFs');
     }
     // Then, remove the chat itself
     db.run('DELETE FROM chats WHERE id = ?', [chatId], function (err2) {
       if (err2) {
-        console.error(err2);
         return res.status(500).send('Failed to delete chat');
       }
       res.sendStatus(200);
@@ -433,7 +431,6 @@ app.post('/api/ask', async (req, res) => {
         }
       }
     } catch (err) {
-      // console.error("❌ Failed to load previous messages:", err);
     }
   }
 
@@ -551,7 +548,6 @@ app.delete('/files/:fileId', (req, res) => {
   const { fileId } = req.params;
   db.get('SELECT id FROM pdfs WHERE id = ?', [fileId], (err, row) => {
     if (err) {
-      console.error(err);
       return res.status(500).send('Database error');
     }
     if (!row) return res.status(404).send('File not found');
@@ -559,7 +555,6 @@ app.delete('/files/:fileId', (req, res) => {
     // Delete from database
     db.run('DELETE FROM pdfs WHERE id = ?', [fileId], function (err2) {
       if (err2) {
-        console.error(err2);
         return res.status(500).send('Failed to delete file');
       }
       res.sendStatus(200);
@@ -1055,6 +1050,127 @@ app.post('/chats/regenerate-titles', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to regenerate titles' });
   }
+});
+
+// Project Management Endpoints
+
+// Get all projects
+app.get('/projects', (req, res) => {
+  db.all(`SELECT * FROM projects ORDER BY created_at DESC`, (err, rows) => {
+    if (err) {
+      return res.status(500).send('Database error');
+    }
+    res.json(rows);
+  });
+});
+
+// Create a new project
+app.post('/projects', (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return res.status(400).send('Project name is required');
+  }
+  
+  db.run(`INSERT INTO projects (name) VALUES (?)`, [name.trim()], function (err) {
+    if (err) {
+      return res.status(500).send('Failed to create project');
+    }
+    res.json({ id: this.lastID, name: name.trim() });
+  });
+});
+
+// Update project name
+app.put('/projects/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  const { name } = req.body;
+  
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return res.status(400).send('Project name is required');
+  }
+  
+  db.run('UPDATE projects SET name = ? WHERE id = ?', [name.trim(), projectId], function (err) {
+    if (err) {
+      return res.status(500).send('Failed to update project');
+    }
+    if (this.changes === 0) {
+      return res.status(404).send('Project not found');
+    }
+    res.sendStatus(200);
+  });
+});
+
+// Delete a project and all its associated chats
+app.delete('/projects/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  
+  // First, remove all PDFs linked to chats in this project
+  db.run('DELETE FROM pdfs WHERE chat_id IN (SELECT id FROM chats WHERE project_id = ?)', [projectId], function (err) {
+    if (err) {
+      return res.status(500).send('Failed to delete project files');
+    }
+    
+    // Then, remove all chats in this project
+    db.run('DELETE FROM chats WHERE project_id = ?', [projectId], function (err2) {
+      if (err2) {
+        return res.status(500).send('Failed to delete project chats');
+      }
+      
+      // Finally, remove the project itself
+      db.run('DELETE FROM projects WHERE id = ?', [projectId], function (err3) {
+        if (err3) {
+          return res.status(500).send('Failed to delete project');
+        }
+        res.sendStatus(200);
+      });
+    });
+  });
+});
+
+// Get all chats for a specific project
+app.get('/projects/:projectId/chats', (req, res) => {
+  const { projectId } = req.params;
+  db.all(`SELECT * FROM chats WHERE project_id = ? ORDER BY id DESC`, [projectId], (err, rows) => {
+    if (err) {
+      return res.status(500).send('Database error');
+    }
+    // Parse the messages field for each chat, handling errors gracefully
+    const parsedRows = rows.map(row => {
+      let messages = [];
+      try {
+        messages = row.messages ? JSON.parse(row.messages) : [];
+        if (!Array.isArray(messages)) messages = [];
+      } catch {
+        messages = [];
+      }
+      return { ...row, messages };
+    });
+    res.json(parsedRows);
+  });
+});
+
+// Create a new chat within a project
+app.post('/projects/:projectId/chats', (req, res) => {
+  const { projectId } = req.params;
+  const { title } = req.body;
+  
+  // First check if the project exists
+  db.get('SELECT id FROM projects WHERE id = ?', [projectId], (err, project) => {
+    if (err) {
+      return res.status(500).send('Database error');
+    }
+    if (!project) {
+      return res.status(404).send('Project not found');
+    }
+    
+    // Create the chat within the project
+    db.run(`INSERT INTO chats (title, messages, project_id) VALUES (?, ?, ?)`, 
+      [title || 'New Chat', '[]', projectId], function (err2) {
+      if (err2) {
+        return res.status(500).send('Failed to create chat');
+      }
+      res.json({ id: this.lastID, title: title || 'New Chat', messages: [], project_id: parseInt(projectId) });
+    });
+  });
 });
 
 app.listen(5000, () => console.log('Backend running on http://localhost:5000'));

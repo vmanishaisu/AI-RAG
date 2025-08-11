@@ -6,14 +6,58 @@ const db = new sqlite3.Database(path.join(__dirname, 'files.db'));
 db.run('PRAGMA foreign_keys = ON');
 
 db.serialize(() => {
-  // Create the chats table
+  // Create the projects table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Create the chats table with project_id foreign key
   db.run(`
     CREATE TABLE IF NOT EXISTS chats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT DEFAULT 'Untitled',
-      messages TEXT
+      messages TEXT,
+      project_id INTEGER,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     )
   `);
+
+  // Check if the chats table needs migration for project_id column
+  db.get(`PRAGMA table_info(chats)`, (err, rows) => {
+    if (err) {
+      console.error("Failed to check chats table structure:", err);
+      return;
+    }
+    
+    // Check if project_id column exists
+    db.all(`PRAGMA table_info(chats)`, (infoErr, infoRows) => {
+      if (infoErr) {
+        console.error("Failed to inspect chats table structure:", infoErr);
+        return;
+      }
+      
+      const hasProjectId = infoRows.some(col => col.name === 'project_id');
+      
+      if (!hasProjectId) {
+        console.log("Adding project_id column to 'chats' table...");
+        
+        db.run(`ALTER TABLE chats ADD COLUMN project_id INTEGER`, (alterErr) => {
+          if (alterErr) {
+            console.error("Failed to add project_id column:", alterErr);
+          } else {
+            console.log("Added project_id column to 'chats' table.");
+          }
+        });
+      } else {
+        console.log("'chats' table already has project_id column.");
+      }
+    });
+  });
 
   // Check if the pdfs table already exists
   db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='pdfs'`, (err, row) => {
