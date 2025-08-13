@@ -13,36 +13,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-const UPLOAD_DIR = path.join(__dirname, 'temp_uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
-});
-const upload = multer({ storage });
-
-// Cleanup function to remove temporary files
-const cleanupTempFiles = () => {
-  try {
-    if (fs.existsSync(UPLOAD_DIR)) {
-      const files = fs.readdirSync(UPLOAD_DIR);
-      files.forEach(file => {
-        const filePath = path.join(UPLOAD_DIR, file);
-        const stats = fs.statSync(filePath);
-        // Remove files older than 1 hour
-        if (Date.now() - stats.mtime.getTime() > 3600000) {
-          fs.unlinkSync(filePath);
-        }
-      });
-    }
-  } catch (err) {
-    // Cleanup error
-  }
-};
-
-// Run cleanup every hour
-setInterval(cleanupTempFiles, 3600000);
+const upload = multer({ storage: multer.memoryStorage() });
 
 let dynamicOpenAIKey = null; // Start with no API key - will be set via frontend
 
@@ -220,27 +191,17 @@ app.post('/upload/:chatId', upload.single('file'), async (req, res) => {
       return res.status(400).send('Chat does not exist');
     }
     
-    // Read the file content into a buffer
-    const fileBuffer = fs.readFileSync(file.path);
-    
-    // Store file content directly in database
+    // Store file content directly in database (file.buffer contains the file data)
     await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO pdfs (chat_id, filename, mimetype, file_content) VALUES (?, ?, ?, ?)`,
-        [chatId, file.originalname, file.mimetype, fileBuffer],
+        [chatId, file.originalname, file.mimetype, file.buffer],
         function (err) {
           if (err) reject(err);
           else resolve();
         }
       );
     });
-    
-    // Delete the temporary file from disk
-    try {
-      fs.unlinkSync(file.path);
-    } catch (e) {
-      // Failed to delete temporary file
-    }
     
     // Generate title if this is a new chat with no messages yet
     let updatedTitle = chatRow.title;
@@ -306,7 +267,7 @@ app.post('/upload/:chatId', upload.single('file'), async (req, res) => {
     if (file.mimetype === 'application/pdf' && openai) {
       try {
                  // Extract text from PDF for analysis
-         const dataBuffer = fileBuffer;
+         const dataBuffer = file.buffer;
          const pdfData = await pdf(dataBuffer);
          const pdfText = pdfData.text; // Read the entire PDF content
         
