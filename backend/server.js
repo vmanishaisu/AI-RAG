@@ -44,13 +44,10 @@ const cleanupTempFiles = () => {
 // Run cleanup every hour
 setInterval(cleanupTempFiles, 3600000);
 
-let dynamicOpenAIKey = process.env.OPENAI_API_KEY;
+let dynamicOpenAIKey = null; // Start with no API key - will be set via frontend
 
 // Initialize OpenAI client
 let openai = null;
-if (dynamicOpenAIKey) {
-  openai = new OpenAI({ apiKey: dynamicOpenAIKey });
-}
 
 // Retrieve all chats from the database, ordered by most recent
 app.get('/chats', (req, res) => {
@@ -304,10 +301,65 @@ app.post('/upload/:chatId', upload.single('file'), async (req, res) => {
       }
     }
     
+    // Generate student-friendly research analysis for PDFs
+    let researchAnalysis = null;
+    console.log('File mimetype:', file.mimetype);
+    console.log('OpenAI client available:', !!openai);
+    if (file.mimetype === 'application/pdf' && openai) {
+      try {
+                 // Extract text from PDF for analysis
+         const dataBuffer = fileBuffer;
+         const pdfData = await pdf(dataBuffer);
+         const pdfText = pdfData.text; // Read the entire PDF content
+        
+                 const analysisResponse = await openai.chat.completions.create({
+           model: 'gpt-4o-mini', // Use gpt-4o-mini for better handling of large PDFs
+           messages: [
+             {
+               role: 'system',
+                               content: `You are an expert research analyst specializing in graduate-level research analysis. Generate 3-5 concise, technical follow-up questions that demonstrate sophisticated understanding of the research.
+
+                Focus areas:
+                - Methodological considerations and experimental design
+                - Statistical analysis and data interpretation
+                - Theoretical frameworks and conceptual models
+                - Research limitations and potential biases
+                - Future research directions and knowledge gaps
+                - Cross-disciplinary applications
+                - Implementation challenges and scalability
+                - Comparative analysis with existing literature
+                
+                Requirements:
+                - Keep each question concise (15-25 words maximum)
+                - Use precise technical terminology
+                - Focus on one specific aspect per question
+                - Maintain academic rigor while being direct
+                
+                Format your response as a simple list with each question on a new line starting with a number and period (e.g., "1. Question here").`
+             },
+             {
+               role: 'user',
+               content: `Analyze this research paper and generate 3-5 graduate-level technical questions that demonstrate sophisticated understanding of the methodology, findings, and implications: ${pdfText}`
+             }
+           ],
+                       max_tokens: 400, // Increased for more comprehensive questions
+         });
+        
+        researchAnalysis = analysisResponse.choices?.[0]?.message?.content || null;
+        console.log('Research analysis generated successfully:', researchAnalysis ? 'Yes' : 'No');
+        console.log('Research analysis content length:', researchAnalysis ? researchAnalysis.length : 0);
+      } catch (err) {
+        // If analysis fails, continue without it
+        console.log('Research analysis failed:', err);
+      }
+    }
+    
+    console.log('Sending response with researchAnalysis:', !!researchAnalysis);
     res.json({ 
       id: chatId, 
       filename: file.originalname,
-      title: updatedTitle
+      title: updatedTitle,
+      researchAnalysis: researchAnalysis
     });
   } catch (err) {
     res.status(500).send('Failed to upload file');
@@ -390,14 +442,17 @@ app.delete('/chats/:chatId', (req, res) => {
 
 // Set the OpenAI API key at runtime via an API endpoint
 app.post('/api/set-openai-key', (req, res) => {
+  console.log('Setting OpenAI API key via frontend...');
   dynamicOpenAIKey = req.body.apikey;
   if (!dynamicOpenAIKey) return res.status(400).json({ error: 'API key required' });
   
   // Reinitialize OpenAI client with new key
   if (dynamicOpenAIKey) {
     openai = new OpenAI({ apiKey: dynamicOpenAIKey });
+    console.log('OpenAI client initialized with frontend API key');
   } else {
     openai = null;
+    console.log('OpenAI client set to null');
   }
   
   res.json({ success: true });
@@ -451,10 +506,11 @@ app.post('/api/ask', async (req, res) => {
       if (fileRow && fileRow.file_content) {
         const dataBuffer = fileRow.file_content;
 
-        if (fileRow.mimetype === 'application/pdf') {
-          const pdfData = await pdf(dataBuffer);
-          context = `The following document has been uploaded for reference:\n\n"""${pdfData.text.substring(0, 3000)}"""\n\n`;
-        } else if (fileRow.mimetype.startsWith('image/')) {
+                 if (fileRow.mimetype === 'application/pdf') {
+           const pdfData = await pdf(dataBuffer);
+           // Use full PDF text for comprehensive context
+           context = `The following document has been uploaded for reference:\n\n"""${pdfData.text}"""\n\n`;
+         } else if (fileRow.mimetype.startsWith('image/')) {
           const base64Image = dataBuffer.toString('base64');
           messages.push({
             role: 'user',

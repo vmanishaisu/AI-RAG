@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperclip, faGear, faImage, faEye, faEyeSlash, faFolder, faPlus, faSearch, faFilePen, faFolderPlus, faArrowDown } from "@fortawesome/free-solid-svg-icons";
+import { faPaperclip, faGear, faImage, faEye, faEyeSlash, faFolder, faPlus, faSearch, faFilePen, faFolderPlus, faArrowDown, faFilePdf } from "@fortawesome/free-solid-svg-icons";
 
 function App() {
   const [chats, setChats] = useState([]);
@@ -41,6 +41,11 @@ function App() {
   const [alternativeInfographicUrl, setAlternativeInfographicUrl] = useState(null);
   const [selectedInfographic, setSelectedInfographic] = useState('primary');
   const [greetingMessage, setGreetingMessage] = useState("");
+  const [pdfsMap, setPdfsMap] = useState({}); // Store PDFs for each chat
+  const [expandedPdfLists, setExpandedPdfLists] = useState({}); // Track which PDF lists are expanded
+  const [selectedPdf, setSelectedPdf] = useState(null); // Track selected PDF for viewing
+  
+
   
   // Search functionality state
   const [searchQuery, setSearchQuery] = useState("");
@@ -109,6 +114,17 @@ function App() {
       
       setChats(data);
       
+      // Extract follow-up questions from messages and populate followupsByChat
+      const newFollowupsByChat = {};
+      data.forEach(chat => {
+        if (chat.messages && Array.isArray(chat.messages)) {
+          const followupMessage = chat.messages.find(msg => msg.role === 'followup-questions');
+          if (followupMessage && Array.isArray(followupMessage.content)) {
+            newFollowupsByChat[chat.id] = followupMessage.content;
+          }
+        }
+      });
+      setFollowupsByChat(newFollowupsByChat);
       
       // If we need to preserve the active chat, find the new index
       if (preserveActiveChat && activeChatId) {
@@ -121,18 +137,19 @@ function App() {
       }
 
       // Download the list of PDFs for every chat and store them in state
-      const pdfsMap = {};
+      const newPdfsMap = {};
       await Promise.all(
         data.map(async (chat) => {
           const resPdfs = await fetch(`http://localhost:5000/chats/${chat.id}/pdfs`);
           if (resPdfs.ok) {
             const pdfs = await resPdfs.json();
-            pdfsMap[chat.id] = pdfs;
+            newPdfsMap[chat.id] = pdfs;
           } else {
-            pdfsMap[chat.id] = [];
+            newPdfsMap[chat.id] = [];
           }
         })
       );
+      setPdfsMap(newPdfsMap);
     } catch (err) {
       setError("Failed to load chats");
     } finally {
@@ -194,17 +211,7 @@ function App() {
     }
   }, [chats, activeChatIndex]);
 
-  useEffect(() => {
-    if (!activeChat || !Array.isArray(activeChat.messages) || activeChat.messages.length === 0) {
-      setFollowupsByChat(prev => {
-        const newState = { ...prev };
-        if (activeChat) {
-          delete newState[activeChat.id];
-        }
-        return newState;
-      });
-    }
-  }, [activeChat]);
+
 
   const [isCreatingProject, setIsCreatingProject] = useState(false);
 
@@ -288,9 +295,9 @@ function App() {
   const handleProjectClick = (projectId) => {
 
     
-    setActiveProjectId(projectId);    
-    // Find the first chat in this project and auto-select it
-    const projectChats = chats.filter(chat => chat.project_id === projectId);
+          setActiveProjectId(projectId);    
+      // Find the first chat in this project and auto-select it
+      const projectChats = chats.filter(chat => chat.project_id === projectId);
     
     
     if (projectChats.length > 0) {
@@ -595,26 +602,72 @@ function App() {
         }
       };
 
-      // Add the new file message to the chat's messages without mutating state
-      const updatedChats = chats.map((chat, index) => {
-        if (index === activeChatIndex) {
-          const updatedMessages = [...(chat.messages || []), fileMessage];
-          return { ...chat, messages: updatedMessages };
+      // If there are followup questions, parse them and store as followup suggestions
+      console.log('Followup questions received:', uploadedFile.researchAnalysis ? 'Yes' : 'No');
+      console.log('Followup questions content:', uploadedFile.researchAnalysis);
+      if (uploadedFile.researchAnalysis) {
+        // Parse the questions from the research analysis text
+        const questionsText = uploadedFile.researchAnalysis;
+        const questions = questionsText
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.match(/^\d+\./)) // Only lines that start with a number and period
+          .map(line => line.replace(/^\d+\.\s*/, '')) // Remove the number and period
+          .filter(question => question.length > 0); // Remove empty questions
+        
+        console.log('Parsed questions:', questions);
+        
+        // Store the questions as followup suggestions for this chat
+        setFollowupsByChat(prev => ({
+          ...prev,
+          [activeChat.id]: questions
+        }));
+        
+        // Create a followup questions message to persist in database
+        const followupMessage = {
+          role: 'followup-questions',
+          content: questions
+        };
+        
+        // Add only the file message and followup questions message (no text response)
+        const updatedChats = chats.map((chat, index) => {
+          if (index === activeChatIndex) {
+            const updatedMessages = [...(chat.messages || []), fileMessage, followupMessage];
+            return { ...chat, messages: updatedMessages };
+          }
+          return chat;
+        });
+        
+        setChats(updatedChats);
+        const updatedChat = updatedChats[activeChatIndex];
+        if (updatedChat) {
+          await saveMessages(updatedChat.id, updatedChat.messages);
         }
-        return chat;
-      });
-      
-      // Update the chat state and then save the new messages to the backend
-      setChats(updatedChats);
-      const updatedChat = updatedChats[activeChatIndex];
-      if (updatedChat) {
-        await saveMessages(updatedChat.id, updatedChat.messages);
+      } else {
+        // Add only the file message if no followup questions
+        const updatedChats = chats.map((chat, index) => {
+          if (index === activeChatIndex) {
+            const updatedMessages = [...(chat.messages || []), fileMessage];
+            return { ...chat, messages: updatedMessages };
+          }
+          return chat;
+        });
+        
+        setChats(updatedChats);
+        const updatedChat = updatedChats[activeChatIndex];
+        if (updatedChat) {
+          await saveMessages(updatedChat.id, updatedChat.messages);
+        }
       }
 
       // 5. Refresh sidebar PDF list
       const resPdfs = await fetch(`http://localhost:5000/chats/${activeChat.id}/pdfs`);
       if (resPdfs.ok) {
-        // PDFs refreshed successfully
+        const pdfs = await resPdfs.json();
+        setPdfsMap(prev => ({
+          ...prev,
+          [activeChat.id]: pdfs
+        }));
       }
     } catch (err) {
       setUploadMessage("❌ Upload failed. Please try again.");
@@ -930,6 +983,8 @@ function App() {
           if (msg.role === 'infographic' && msg.content.summary) {
             return msg.content.summary.toLowerCase().includes(query);
           }
+          
+
         }
         
         return false;
@@ -944,10 +999,31 @@ function App() {
 
   // Helper function to truncate chat titles to maximum 4 words
   const truncateTitle = (title) => {
-    if (!title) return "";
-    const words = title.split(' ').filter(word => word.trim().length > 0);
-    return words.slice(0, 4).join(' ');
+    if (!title) return "Untitled";
+    return title.length > 20 ? title.substring(0, 20) + "..." : title;
   };
+
+  // Toggle PDF list expansion for a specific chat
+  const togglePdfList = (chatId) => {
+    setExpandedPdfLists(prev => ({
+      ...prev,
+      [chatId]: !prev[chatId]
+    }));
+  };
+
+  // Handle PDF click to view
+  const handlePdfClick = (pdf) => {
+    setSelectedPdf(pdf);
+  };
+
+  // Close PDF viewer
+  const closePdfViewer = () => {
+    setSelectedPdf(null);
+  };
+
+
+
+
 
   return (
     <div className="app">
@@ -1243,7 +1319,30 @@ function App() {
                                 onClick={(e) => e.stopPropagation()}
                                 className="chat-checkbox"
                               />
-                              <span className="chat-title">{truncateTitle(chat.title)}</span>
+                              <div className="chat-item-content">
+                                <span className="chat-title">{truncateTitle(chat.title)}</span>
+                                
+                                {/* PDF List for this chat */}
+                                {pdfsMap[chat.id] && pdfsMap[chat.id].length > 0 && (
+                                  <div className="chat-pdfs-list">
+                                    {pdfsMap[chat.id].map((pdf, pdfIndex) => (
+                                      <div 
+                                        key={pdf.id} 
+                                        className="chat-pdf-item clickable"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handlePdfClick(pdf);
+                                        }}
+                                        title={`View ${pdf.filename}`}
+                                      >
+                                        <FontAwesomeIcon icon={faFilePdf} className="pdf-icon" />
+                                        <span className="pdf-filename">{pdf.filename}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              
                               <button
                                 className="chat-title-menu-trigger"
                     onClick={(e) => {
@@ -1401,7 +1500,30 @@ function App() {
                     onClick={(e) => e.stopPropagation()}
                     className="chat-checkbox"
                   />
-                              <span className="chat-title">{truncateTitle(chat.title)}</span>
+                              <div className="chat-item-content">
+                                <span className="chat-title">{truncateTitle(chat.title)}</span>
+                                
+                                {/* PDF List for this chat */}
+                                {pdfsMap[chat.id] && pdfsMap[chat.id].length > 0 && (
+                                  <div className="chat-pdfs-list">
+                                    {pdfsMap[chat.id].map((pdf, pdfIndex) => (
+                                      <div 
+                                        key={pdf.id} 
+                                        className="chat-pdf-item clickable"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handlePdfClick(pdf);
+                                        }}
+                                        title={`View ${pdf.filename}`}
+                                      >
+                                        <FontAwesomeIcon icon={faFilePdf} className="pdf-icon" />
+                                        <span className="pdf-filename">{pdf.filename}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              
                   <button
                     className="chat-title-menu-trigger"
                     onClick={(e) => {
@@ -1474,17 +1596,39 @@ function App() {
             activeChat.messages.map((msg, i) => {
               if (msg.role === 'file') {
                 return (
-                  <div key={i} className="message file">
-                    <div className="file-bubble">
-                      <FontAwesomeIcon icon={faPaperclip} className="file-icon" />
-                      <div className="file-info">
-                        <span className="file-name">{msg.content.name}</span>
-                        <span className="file-type">File Uploaded</span>
-                      </div>
-                    </div>
+                  <div key={i} className="message file" style={{ 
+                    border: 'none', 
+                    background: 'transparent', 
+                    boxShadow: 'none',
+                    padding: '8px 0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <FontAwesomeIcon 
+                      icon={faPaperclip} 
+                      className="file-icon" 
+                      style={{ 
+                        color: '#6b7280',
+                        fontSize: '16px'
+                      }}
+                    />
+                    <span className="file-name" style={{ 
+                      color: '#374151',
+                      fontSize: '14px'
+                    }}>
+                      {msg.content.name}
+                    </span>
+                    <span className="file-type" style={{ 
+                      color: '#6b7280',
+                      fontSize: '12px'
+                    }}>
+                      File Uploaded
+                    </span>
                   </div>
                 );
               }
+
               if (msg.role === 'infographic') {
                 return (
                   <div key={i} className="message infographic">
@@ -1562,6 +1706,14 @@ function App() {
                   </div>
                 );
               }
+
+
+
+              // Skip rendering followup-questions messages as text since they're displayed as buttons
+              if (msg.role === 'followup-questions') {
+                return null;
+              }
+              
               return (
                 <div key={i} className={`message ${msg.role}`}>
                   <strong>{msg.role === 'assistant' ? 'Assistant' : 'You'}:</strong>{" "}
@@ -1635,14 +1787,13 @@ function App() {
           )}
           {activeChat && followupsByChat[activeChat.id] && followupsByChat[activeChat.id].length > 0 && (
             <div style={{ marginTop: 24 }}>
-              <div style={{ fontWeight: 500, marginBottom: 8 }}>AI Follow-up Suggestions:</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {followupsByChat[activeChat.id].map((q, i) => (
                   <button
                     key={i}
                     style={{
-                      background: "#e0e7ff",
-                      color: "#1e293b",
+                      background: "#6b7280",
+                      color: "#ffffff",
                       border: "none",
                       borderRadius: 6,
                       padding: "6px 14px",
@@ -1972,6 +2123,39 @@ function App() {
           </div>
         </div>
       )}
+      
+      {/* PDF Viewer Modal */}
+      {selectedPdf && (
+        <div className="modal-overlay" onClick={closePdfViewer}>
+          <div className="modal-content pdf-viewer-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pdf-viewer-header">
+              <h3>{selectedPdf.filename}</h3>
+              <button className="close-button" onClick={closePdfViewer}>×</button>
+            </div>
+            <div className="pdf-viewer-content">
+              <iframe
+                src={`http://localhost:5000/files/${selectedPdf.id}/view`}
+                title={selectedPdf.filename}
+                width="100%"
+                height="600px"
+                style={{ border: 'none', borderRadius: '8px' }}
+              />
+            </div>
+            <div className="pdf-viewer-actions">
+              <a 
+                href={`http://localhost:5000/files/${selectedPdf.id}/download`}
+                download={selectedPdf.filename}
+                className="download-pdf-btn"
+              >
+                <FontAwesomeIcon icon={faArrowDown} />
+                Download PDF
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       
     </div>
   );
