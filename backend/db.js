@@ -43,18 +43,14 @@ db.serialize(() => {
       
       const hasProjectId = infoRows.some(col => col.name === 'project_id');
       
-      if (!hasProjectId) {
-        console.log("Adding project_id column to 'chats' table...");
-        
+      if (!hasProjectId) {        
         db.run(`ALTER TABLE chats ADD COLUMN project_id INTEGER`, (alterErr) => {
           if (alterErr) {
             console.error("Failed to add project_id column:", alterErr);
           } else {
-            console.log("Added project_id column to 'chats' table.");
           }
         });
       } else {
-        console.log("'chats' table already has project_id column.");
       }
     });
   });
@@ -77,16 +73,11 @@ db.serialize(() => {
         const hasFileContent = infoRows.some(col => col.name === 'file_content');
         const hasCascade = infoRows.some(row => row.on_delete && row.on_delete.toUpperCase() === 'CASCADE');
         
-        if (!hasFileContent) {
-          console.log("Adding file_content column to 'pdfs' table...");
-          
+        if (!hasFileContent) {          
           db.run(`ALTER TABLE pdfs ADD COLUMN file_content BLOB`);
-          console.log("Added file_content column to 'pdfs' table.");
         }
         
         if (!hasCascade) {
-          console.log("Migrating 'pdfs' table to support ON DELETE CASCADE...");
-
           db.serialize(() => {
             db.run(`
               CREATE TABLE IF NOT EXISTS pdfs_temp (
@@ -108,11 +99,8 @@ db.serialize(() => {
 
             db.run(`DROP TABLE pdfs`);
             db.run(`ALTER TABLE pdfs_temp RENAME TO pdfs`);
-
-            console.log("Migration completed: 'pdfs' now uses ON DELETE CASCADE and has file_content column.");
           });
         } else {
-          console.log("'pdfs' table already has ON DELETE CASCADE and file_content column.");
         }
         
         // Clean up old filepath references for records that don't have file_content
@@ -120,7 +108,6 @@ db.serialize(() => {
           if (err) {
             console.error("Failed to clean up old filepath references:", err);
           } else {
-            console.log("Cleaned up old filepath references for records without file_content.");
           }
         });
       });

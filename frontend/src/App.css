@@ -503,12 +503,18 @@ body {
   transition: background-color 0.2s;
   position: relative;
   font-size: 0.8rem;
+  background: var(--background-light);
+}
+
+.dark .chat-history-item {
+  background: var(--sidebar-dark);
 }
 
 .chat-item-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: transparent;
 }
 
 .chat-history-item.active {
@@ -533,6 +539,7 @@ body {
   transition: background-color 0.2s;
   position: relative;
   font-size: 0.8rem;
+  background: var(--background-light);
 }
 
 .project-chat-item.active {
@@ -559,18 +566,23 @@ body {
 /* Chat Action Menu */
 .chat-menu-trigger {
   position: absolute;
-  top: 50%;
-  right: 0.75rem;
-  transform: translateY(-50%);
-  opacity: 0;
+  top: 0.1rem;
+  right: 0.25rem;
+  opacity: 0.3;
   transition: opacity 0.2s;
   font-size: 1rem;
   line-height: 1;
+  color: var(--text-light);
+}
+
+.dark .chat-menu-trigger {
+  color: var(--text-dark);
 }
 
 .chat-history-item:hover .chat-menu-trigger,
+.project-chat-item:hover .chat-menu-trigger,
 .chat-history-item.active .chat-menu-trigger {
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .chat-menu-trigger:hover {
@@ -714,27 +726,44 @@ body {
   border-top-color: var(--border-dark);
 }
 
-.text-input {
+.input-container {
   flex: 1;
-  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
   border: 1px solid var(--border-light);
   border-radius: 0.5rem;
-  font-size: 1rem;
   background: var(--background-light);
-  color: var(--text-light);
+  overflow: hidden;
   transition: border-color 0.2s;
 }
 
-.dark .text-input {
+.dark .input-container {
   background: var(--sidebar-dark);
   border-color: var(--border-dark);
+}
+
+.input-container:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.1);
+}
+
+.text-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  font-size: 1rem;
+  background: transparent;
+  color: var(--text-light);
+  outline: none;
+}
+
+.dark .text-input {
   color: var(--text-dark);
 }
 
-.text-input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.1);
+.text-input::placeholder {
+  color: var(--secondary-color);
+  opacity: 0.7;
 }
 
 .send-button {
@@ -742,10 +771,10 @@ body {
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
+  border-radius: 0;
 }
 
 .send-button:hover {
@@ -755,10 +784,13 @@ body {
 /* File Upload Button */
 .file-upload {
   padding: 0.75rem;
-  border-radius: 0.5rem;
   cursor: pointer;
   color: #9ca3af;
   transition: background-color 0.2s;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .file-upload:hover {
@@ -1243,9 +1275,10 @@ input:checked + .slider:before {
 }
 
 .chat-checkbox {
-  opacity: 0;
+  opacity: 0.3;
   transition: opacity 0.2s;
-  margin-right: 0.75rem;
+  margin-right: 0.5rem;
+  margin-left: -0.5rem;
   accent-color: var(--primary-color);
   cursor: pointer;
 }
@@ -1732,12 +1765,11 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.375rem 0.5rem;
+  padding: 0.25rem 0;
   color: var(--secondary-color);
   opacity: 0.9;
-  background: var(--background-light);
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
+  background: transparent;
+  border: none;
   transition: all 0.2s ease;
   font-size: 0.75rem;
 }
@@ -1745,19 +1777,19 @@ input:checked + .slider:before {
 .dark .chat-pdf-item {
   color: var(--text-dark);
   opacity: 0.8;
-  background: var(--sidebar-dark);
-  border-color: var(--border-dark);
+  background: transparent;
+  border: none;
 }
 
 .chat-pdf-item:hover {
-  background: var(--hover-light);
-  border-color: var(--primary-color);
+  background: transparent;
   transform: translateX(2px);
+  opacity: 1;
 }
 
 .dark .chat-pdf-item:hover {
-  background: var(--hover-dark);
-  border-color: var(--primary-color);
+  background: transparent;
+  opacity: 1;
 }
 
 .pdf-icon {

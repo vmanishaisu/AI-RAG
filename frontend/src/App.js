@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperclip, faGear, faImage, faEye, faEyeSlash, faFolder, faPlus, faSearch, faFilePen, faFolderPlus, faArrowDown, faFilePdf } from "@fortawesome/free-solid-svg-icons";
+import { faPaperclip, faGear, faImage, faEye, faEyeSlash, faFolder, faPlus, faSearch, faFilePen, faFolderPlus, faArrowDown, faFilePdf, faArrowUp } from "@fortawesome/free-solid-svg-icons";
 
 function App() {
   const [chats, setChats] = useState([]);
@@ -96,20 +96,24 @@ function App() {
   }, []); 
 
   const fetchChats = useCallback(async (preserveActiveChat = false) => {
-
+    
     setChatsLoading(true);
     setError("");
     try {
       const res = await fetch("http://localhost:5000/chats");
-      if (!res.ok) throw new Error("Failed to load chats");
+     
+      
+      if (!res.ok) {
+        console.error("❌ Response not OK:", res.status, res.statusText);
+        throw new Error(`Failed to load chats: ${res.status} ${res.statusText}`);
+      }
+      
       const data = await res.json();
-      
-      
+     
       // If we need to preserve the active chat, find the current active chat ID
       let activeChatId = null;
       if (preserveActiveChat && activeChatIndex !== null && chats[activeChatIndex]) {
         activeChatId = chats[activeChatIndex].id;
-
       }
       
       setChats(data);
@@ -118,7 +122,7 @@ function App() {
       const newFollowupsByChat = {};
       data.forEach(chat => {
         if (chat.messages && Array.isArray(chat.messages)) {
-          const followupMessage = chat.messages.find(msg => msg.role === 'followup-questions');
+          const followupMessage = chat.messages.find(msg => msg && msg.role === 'followup-questions');
           if (followupMessage && Array.isArray(followupMessage.content)) {
             newFollowupsByChat[chat.id] = followupMessage.content;
           }
@@ -132,7 +136,6 @@ function App() {
 
         if (newActiveIndex !== -1) {
           setActiveChatIndex(newActiveIndex);
-  
         }
       }
 
@@ -140,17 +143,28 @@ function App() {
       const newPdfsMap = {};
       await Promise.all(
         data.map(async (chat) => {
-          const resPdfs = await fetch(`http://localhost:5000/chats/${chat.id}/pdfs`);
-          if (resPdfs.ok) {
-            const pdfs = await resPdfs.json();
-            newPdfsMap[chat.id] = pdfs;
-          } else {
+          try {
+            const resPdfs = await fetch(`http://localhost:5000/chats/${chat.id}/pdfs`);
+            if (resPdfs.ok) {
+              const pdfs = await resPdfs.json();
+              newPdfsMap[chat.id] = pdfs;
+            } else {
+              newPdfsMap[chat.id] = [];
+            }
+          } catch (pdfErr) {
             newPdfsMap[chat.id] = [];
           }
         })
       );
       setPdfsMap(newPdfsMap);
+      
     } catch (err) {
+      console.error("❌ Error in fetchChats:", err);
+      console.error("❌ Error details:", {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
       setError("Failed to load chats");
     } finally {
       setChatsLoading(false);
@@ -603,8 +617,6 @@ function App() {
       };
 
       // If there are followup questions, parse them and store as followup suggestions
-      console.log('Followup questions received:', uploadedFile.researchAnalysis ? 'Yes' : 'No');
-      console.log('Followup questions content:', uploadedFile.researchAnalysis);
       if (uploadedFile.researchAnalysis) {
         // Parse the questions from the research analysis text
         const questionsText = uploadedFile.researchAnalysis;
@@ -614,9 +626,7 @@ function App() {
           .filter(line => line.match(/^\d+\./)) // Only lines that start with a number and period
           .map(line => line.replace(/^\d+\.\s*/, '')) // Remove the number and period
           .filter(question => question.length > 0); // Remove empty questions
-        
-        console.log('Parsed questions:', questions);
-        
+                
         // Store the questions as followup suggestions for this chat
         setFollowupsByChat(prev => ({
           ...prev,
@@ -1710,13 +1720,17 @@ function App() {
 
 
               // Skip rendering followup-questions messages as text since they're displayed as buttons
-              if (msg.role === 'followup-questions') {
+              if (msg && msg.role === 'followup-questions') {
+                return null;
+              }
+              
+              // Skip null messages
+              if (!msg) {
                 return null;
               }
               
               return (
                 <div key={i} className={`message ${msg.role}`}>
-                  <strong>{msg.role === 'assistant' ? 'Assistant' : 'You'}:</strong>{" "}
                   {msg.role === "user" && editingMessageIndex === i ? (
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input
@@ -1811,10 +1825,25 @@ function App() {
         </div>
 
         <div className="input-area">
-          <label className="file-upload" title="Upload File">
-            <FontAwesomeIcon icon={faPaperclip} />
-            <input type="file" accept="application/pdf,image/*" onChange={handleFileChange} hidden />
-          </label>
+          <div className="input-container">
+            <label className="file-upload" title="Upload File">
+              <FontAwesomeIcon icon={faPaperclip} />
+              <input type="file" accept="application/pdf,image/*" onChange={handleFileChange} hidden />
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              name="chat-question-unique-2024"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask a question..."
+              className="text-input"
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            />
+            <button onClick={() => handleSend()} className="send-button">
+              <FontAwesomeIcon icon={faArrowUp} />
+            </button>
+          </div>
           <button 
             className="infographic-button" 
             title="Generate High-Resolution Infographic"
@@ -1828,23 +1857,12 @@ function App() {
             <FontAwesomeIcon icon={faImage} />
             {generatingInfographic ? (
               <span>
-                <span style={{ animation: 'pulse 1.5s infinite' }}>🔄</span> Generating HD...
+                <span style={{ animation: 'pulse 1.5s infinite' }}>🔄</span> Generating...
               </span>
             ) : (
-              "HD Infographic"
+              "Infographic"
             )}
           </button>
-          <input
-            type="text"
-            autoComplete="off"
-            name="chat-question-unique-2024"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
-            className="text-input"
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          />
-          <button onClick={() => handleSend()} className="send-button">Send</button>
         </div>
 
         {uploadMessage && (

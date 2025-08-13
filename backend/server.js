@@ -303,8 +303,6 @@ app.post('/upload/:chatId', upload.single('file'), async (req, res) => {
     
     // Generate student-friendly research analysis for PDFs
     let researchAnalysis = null;
-    console.log('File mimetype:', file.mimetype);
-    console.log('OpenAI client available:', !!openai);
     if (file.mimetype === 'application/pdf' && openai) {
       try {
                  // Extract text from PDF for analysis
@@ -346,15 +344,11 @@ app.post('/upload/:chatId', upload.single('file'), async (req, res) => {
          });
         
         researchAnalysis = analysisResponse.choices?.[0]?.message?.content || null;
-        console.log('Research analysis generated successfully:', researchAnalysis ? 'Yes' : 'No');
-        console.log('Research analysis content length:', researchAnalysis ? researchAnalysis.length : 0);
       } catch (err) {
         // If analysis fails, continue without it
-        console.log('Research analysis failed:', err);
       }
     }
     
-    console.log('Sending response with researchAnalysis:', !!researchAnalysis);
     res.json({ 
       id: chatId, 
       filename: file.originalname,
@@ -442,17 +436,14 @@ app.delete('/chats/:chatId', (req, res) => {
 
 // Set the OpenAI API key at runtime via an API endpoint
 app.post('/api/set-openai-key', (req, res) => {
-  console.log('Setting OpenAI API key via frontend...');
   dynamicOpenAIKey = req.body.apikey;
   if (!dynamicOpenAIKey) return res.status(400).json({ error: 'API key required' });
   
   // Reinitialize OpenAI client with new key
   if (dynamicOpenAIKey) {
     openai = new OpenAI({ apiKey: dynamicOpenAIKey });
-    console.log('OpenAI client initialized with frontend API key');
   } else {
     openai = null;
-    console.log('OpenAI client set to null');
   }
   
   res.json({ success: true });
