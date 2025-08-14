@@ -1,336 +1,631 @@
-# 🎯 AI-Powered Research Assistant
+# 🎨 AI-RAG Frontend
 
-> **A sophisticated research assistant that combines PDF analysis, intelligent Q&A, and professional-grade infographic generation.**
+> **The beautiful interface for your AI research assistant. Modern, responsive, and easy to use.**
 
 [![React](https://img.shields.io/badge/React-19.1.0-blue.svg)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-Latest-green.svg)](https://nodejs.org/)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini%20%7C%20DALL--E--3-orange.svg)](https://openai.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![FontAwesome](https://img.shields.io/badge/FontAwesome-6.7.2-lightgrey.svg)](https://fontawesome.com/)
 
 ---
 
-## ✨ Key Features
+## 🎯 What You'll Find Here
 
-### 📚 **Document Intelligence**
-- **PDF Analysis**: Advanced text extraction and processing
-- **Multi-format Support**: PDF documents and images
-- **Context-Aware AI**: Intelligent document understanding
-- **Smart Content Extraction**: Automatic identification of key information
+### 🎨 **Beautiful User Interface**
+- **Works on any device** - desktop, tablet, or mobile
+- **Dark and light themes** - choose what works best for you
+- **Smooth animations** - pleasant interactions throughout
+- **Loading indicators** - know when things are happening
 
-### 🤖 **AI-Powered Q&A System**
-- **Contextual Responses**: GPT-3.5-turbo with document context
-- **Vision Support**: GPT-4-vision for image analysis
-- **Follow-up Suggestions**: AI-generated relevant questions
-- **Conversation Memory**: Persistent chat history
+### 📱 **Easy to Use**
 
-### 🎨 **Professional Infographic Generation**
-- **🆕 Three Unique Styles**: Enhanced, Alternative, and Dashboard layouts
-- **🆕 Square Format**: Optimized 1024x1024 resolution
-- **🆕 Smart Theming**: Automatic background colors based on content
-- **🆕 Professional Design**: Title positioning, icons, and visual hierarchy
-- **🆕 Comprehensive Data**: Statistics, processes, findings, impacts, timelines
+#### **Sidebar Navigation**
+- **Organize with projects** - group related research together
+- **Find anything quickly** - search across all your work
+- **Manage files easily** - view and organize your documents
+- **Switch themes** - dark or light mode with one click
 
-### 💼 **Enterprise-Ready Features**
-- **Multi-Chat Management**: Organize multiple research sessions
-- **Bulk Operations**: Delete multiple chats efficiently
-- **Dark/Light Themes**: Professional UI with theme switching
-- **File Management**: Upload, view, and delete files per chat
-- **API Key Security**: Runtime API key configuration
+#### **Chat Interface**
+- **Natural conversations** - chat with your documents
+- **Upload files easily** - drag and drop or click to upload
+- **Edit your questions** - improve and refine your queries
+- **Smart suggestions** - AI helps you ask better questions
 
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React Frontend │────│ Express Backend │────│   OpenAI API    │
-│                 │    │                 │    │                 │
-│ • Chat Interface│    │ • PDF Processing│    │ • GPT-3.5-turbo │
-│ • File Upload   │    │ • Q&A System    │    │ • GPT-4o-mini   │
-│ • Infographic UI│    │ • Image Gen     │    │ • GPT-Image-1   │
-│ • Theme System  │    │ • SQLite DB     │    │ • Vision Models │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+#### **Project Organization**
+- **Create project folders** - keep related work together
+- **Nested conversations** - chats within projects
+- **Quick actions** - create new chats with one click
+- **Bulk management** - handle multiple items efficiently
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Get Started
 
-### Prerequisites
+### What You Need
+- **Node.js** (version 16 or higher)
+- **Backend server** running on `http://localhost:5000`
 
-- **Node.js** v16+ 
-- **OpenAI API Key** with access to:
-  - GPT-3.5-turbo
-  - GPT-4o-mini  
-  - GPT-Image-1 (or DALL-E-3)
-  - GPT-4-vision (optional)
-
-### Quick Installation
+### Quick Setup
 
 ```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd AI-Powered-Research-Assistant/my-app
-
-# 2. Install frontend dependencies
+# Install dependencies
 npm install
 
-# 3. Install backend dependencies
-cd backend
-npm install
-
-# 4. Start the backend server
-node server.js
-
-# 5. In a new terminal, start the frontend
-cd ..
+# Start the development server
 npm start
+
+# Your app will open at http://localhost:3000
 ```
 
-### 🔧 Configuration
+### Build for Production
 
-1. **Set OpenAI API Key**: Click the gear icon ⚙️ in the sidebar
-2. **Upload Documents**: Use the paperclip icon 📎 to add PDFs
-3. **Start Chatting**: Ask questions about your documents
-4. **Generate Infographics**: Click the "HD Infographic" button 🖼️
-
----
-
-## 📖 Usage Guide
-
-### 🎨 **Infographic Generation**
-
-#### **Step 1: Prepare Your Document**
 ```bash
-✅ Upload a PDF research paper, report, or document
-✅ Ensure the document contains data, statistics, or processes
-✅ Documents with numbers, percentages, and findings work best
-```
+# Create an optimized build
+npm run build
 
-#### **Step 2: Generate Professional Infographics**
-1. Click the **"HD Infographic"** button
-2. Wait for AI processing (typically 30-60 seconds)
-3. Choose from **3 professional styles**:
-   - **Enhanced**: Clean academic style with comprehensive data
-   - **Alternative**: Research overview with alternative layout  
-   - **Dashboard**: Modern dashboard-style visualization
-
-#### **Step 3: Download & Use**
-```bash
-📥 Click "Download High-Resolution" for each style
-📄 1024x1024 square format perfect for presentations
-🎨 Professional design with smart color theming
-📊 Includes statistics, processes, findings, and impacts
-```
-
-### 💬 **Intelligent Q&A**
-
-#### **Advanced Document Queries**
-```bash
-# Research Analysis
-"Summarize the key findings of this study"
-"What methodology was used in this research?"
-"According to the document, what are the main benefits?"
-
-# Data Extraction
-"What statistics are mentioned in the PDF?"
-"Explain the process described in section 3"
-"What tools were used in this research?"
-
-# Comparative Analysis
-"How does this compare to previous studies?"
-"What are the limitations mentioned?"
-"Based on the document, what are the future implications?"
+# The build will be in the 'build' folder
 ```
 
 ---
 
-## 🛠️ Technical Specifications
+## 🏗️ How It's Built
 
-### **Backend Architecture**
+### **Main Components**
+
+#### **App.js** - The Heart of the Application
 ```javascript
-// Core Technologies
-Express.js 5.1.0       // Web framework
-SQLite3 5.1.7          // Database
-OpenAI 5.11.0          // AI integration
-PDF-Parse 1.1.1        // Document processing
-Multer 2.0.1           // File uploads
+// Core state management
+const [chats, setChats] = useState([]);
+const [projects, setProjects] = useState([]);
+const [activeChatIndex, setActiveChatIndex] = useState(null);
+const [darkMode, setDarkMode] = useState(false);
 ```
 
-### **Frontend Stack**
+#### **What It Does**
+- **Manages state** - keeps track of chats, projects, and settings
+- **Handles API calls** - communicates with the backend
+- **Manages user interactions** - handles clicks, uploads, and form submissions
+- **Controls themes** - switches between dark and light modes
+- **Handles files** - uploads, views, and manages documents
+
+### **Component Structure**
+
+```
+App.js
+├── Sidebar
+│   ├── Search
+│   ├── Action Buttons
+│   ├── Projects
+│   ├── Chats
+│   └── Theme Toggle
+├── Chat Area
+│   ├── Header
+│   ├── Messages
+│   └── Input Area
+└── Modals
+    ├── Settings
+    ├── File Viewer
+    └── Confirmation Dialogs
+```
+
+---
+
+## 🎨 Design Features
+
+### **Responsive Design**
+
+**Desktop Layout**
+```css
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+```
+
+**Mobile Friendly**
+- **Collapsible sidebar** - saves space on small screens
+- **Touch optimized** - easy to use on phones and tablets
+- **Readable text** - appropriate sizes for all devices
+- **Efficient layout** - maximizes content area
+
+### **Theme System**
+
+**CSS Variables**
+```css
+:root {
+  --primary-color: #9ca3af;
+  --secondary-color: #6b7280;
+  --background-light: #ffffff;
+  --background-dark: #111827;
+  --text-light: #374151;
+  --text-dark: #f3f4f6;
+}
+```
+
+**Theme Switching**
 ```javascript
-// Modern React Setup
-React 19.1.0           // UI framework
-FontAwesome 6.7.2      // Icons
-TailwindCSS 4.1.10     // Styling
-React Testing Library   // Testing
+const toggleDarkMode = () => {
+  setDarkMode((prev) => !prev);
+};
+
+useEffect(() => {
+  document.documentElement.classList.toggle("dark", darkMode);
+}, [darkMode]);
 ```
 
-### **AI Models & Capabilities**
-```yaml
-Text Processing:
-  - GPT-3.5-turbo: Document summarization, Q&A
-  - GPT-4o-mini: Structured content extraction
+### **Interactive Elements**
+
+**Hover Effects**
+```css
+.chat-history-item:hover {
+  background: var(--hover-light);
+  transform: translateX(2px);
+  transition: all 0.2s ease;
+}
+```
+
+**Loading States**
+```javascript
+const [generatingInfographic, setGeneratingInfographic] = useState(false);
+
+// Loading indicator
+{generatingInfographic ? (
+  <span style={{ animation: 'pulse 1.5s infinite' }}>🔄</span>
+) : (
+  "Infographic"
+)}
+```
+
+---
+
+## 🔧 Technical Details
+
+### **Core Technologies**
+- **React 19.1.0** - Modern UI framework
+- **FontAwesome 6.7.2** - Beautiful icons
+- **CSS Variables** - Flexible theming system
+- **Fetch API** - Communication with backend
+
+### **State Management**
+
+#### **Application State**
+```javascript
+// Chat and project management
+const [chats, setChats] = useState([]);
+const [projects, setProjects] = useState([]);
+const [activeChatIndex, setActiveChatIndex] = useState(null);
+const [activeProjectId, setActiveProjectId] = useState(null);
+
+// UI state
+const [darkMode, setDarkMode] = useState(false);
+const [menuOpenIndex, setMenuOpenIndex] = useState(null);
+const [showSettings, setShowSettings] = useState(false);
+
+// File management
+const [pdfsMap, setPdfsMap] = useState({});
+const [selectedPdf, setSelectedPdf] = useState(null);
+```
+
+#### **API Communication**
+```javascript
+// Fetch chats with project information
+const fetchChats = useCallback(async (preserveActiveChat = false) => {
+  try {
+    const res = await fetch("http://localhost:5000/chats");
+    const data = await res.json();
+    setChats(data);
+  } catch (err) {
+    setError("Failed to load chats");
+  }
+}, []);
+```
+
+### **File Handling**
+
+#### **File Upload**
+```javascript
+const handleFileChange = async (e) => {
+  const file = e.target.files[0];
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`http://localhost:5000/upload/${activeChat.id}`, {
+    method: "POST",
+    body: formData,
+  });
+};
+```
+
+#### **File Display**
+```javascript
+// PDF viewer modal
+{selectedPdf && (
+  <div className="modal-overlay">
+    <div className="modal-content pdf-viewer-modal">
+      <iframe
+        src={`http://localhost:5000/files/${selectedPdf.id}/view`}
+        title={selectedPdf.filename}
+        width="100%"
+        height="600px"
+      />
+    </div>
+  </div>
+)}
+```
+
+---
+
+## 🎨 Styling System
+
+### **CSS Architecture**
+
+#### **Base Styles**
+```css
+/* Modern CSS Reset and Variables */
+:root {
+  --primary-color: #9ca3af;
+  --secondary-color: #6b7280;
+  /* ... more variables */
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+```
+
+#### **Component Styles**
+```css
+/* Sidebar styling */
+.sidebar {
+  background: var(--sidebar-light);
+  border-right: 1px solid var(--border-light);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+/* Message styling */
+.message {
+  max-width: 80%;
+  padding: 1rem 1.5rem;
+  border-radius: 1rem;
+  position: relative;
+  line-height: 1.6;
+}
+```
+
+### **Responsive Design**
+
+#### **Grid Layout**
+```css
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+}
+```
+
+#### **Flexible Components**
+```css
+.chat-window {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+```
+
+---
+
+## 🔍 Search Functionality
+
+### **Global Search**
+
+#### **Search State**
+```javascript
+const [searchQuery, setSearchQuery] = useState("");
+const [showSearchResults, setShowSearchResults] = useState(false);
+```
+
+#### **Search Logic**
+```javascript
+const getSearchResults = () => {
+  if (!searchQuery.trim()) return [];
   
-Image Processing:
-  - GPT-4-vision: Image analysis and description
+  const query = searchQuery.toLowerCase();
+  return chats.filter(chat => 
+    chat.title.toLowerCase().includes(query) ||
+    (chat.messages && chat.messages.some(msg => {
+      if (typeof msg.content === 'string') {
+        return msg.content.toLowerCase().includes(query);
+      }
+      return false;
+    }))
+  );
+};
+```
+
+#### **Search Interface**
+```javascript
+<div className="search-container">
+  <FontAwesomeIcon icon={faSearch} className="search-icon" />
+  <input
+    type="text"
+    placeholder="Search chats..."
+    value={searchQuery}
+    onChange={(e) => handleSearch(e.target.value)}
+    className="search-input"
+  />
+</div>
+```
+
+---
+
+## 📱 Project Management
+
+### **Project Organization**
+
+#### **Project Structure**
+```javascript
+// Project container with nested chats
+<div className="project-container">
+  <div className="project-item">
+    <FontAwesomeIcon icon={faFolder} />
+    <span className="project-name">{project.name}</span>
+    <button className="project-new-chat-button">
+      <FontAwesomeIcon icon={faPlus} />
+    </button>
+  </div>
   
-Image Generation:
-  - GPT-Image-1: Professional infographic creation
-  - Custom: Three specialized prompt templates
+  {/* Nested chats */}
+  <div className="project-chats">
+    {projectChats.map((chat) => (
+      <div className="project-chat-item">
+        <span className="chat-title">{chat.title}</span>
+      </div>
+    ))}
+  </div>
+</div>
+```
+
+#### **Bulk Operations**
+```javascript
+// Bulk selection state
+const [selectedProjects, setSelectedProjects] = useState([]);
+const [selectedChats, setSelectedChats] = useState([]);
+
+// Bulk delete functionality
+const confirmBulkDelete = async () => {
+  for (const chatId of selectedChats) {
+    await fetch(`http://localhost:5000/chats/${chatId}`, { 
+      method: 'DELETE' 
+    });
+  }
+  setChats((prev) => prev.filter((chat) => !selectedChats.includes(chat.id)));
+};
+```
+
+---
+
+## 🎨 Infographic Display
+
+### **Infographic Viewer**
+
+#### **Multiple Styles**
+```javascript
+const [selectedInfographic, setSelectedInfographic] = useState('primary');
+
+// Style selector
+<div className="infographic-style-selector">
+  <button
+    className={`style-btn ${selectedInfographic === 'primary' ? 'active' : ''}`}
+    onClick={() => setSelectedInfographic('primary')}
+  >
+    Style 1
+  </button>
+  <button
+    className={`style-btn ${selectedInfographic === 'alternative' ? 'active' : ''}`}
+    onClick={() => setSelectedInfographic('alternative')}
+  >
+    Style 2
+  </button>
+</div>
+```
+
+#### **Download Functionality**
+```javascript
+const handleDownloadInfographic = async (imageUrl) => {
+  const response = await fetch(imageUrl);
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `infographic-${Date.now()}.png`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+```
+
+---
+
+## 🔧 Development
+
+### **Development Commands**
+
+```bash
+# Start development server
+npm start
+
+# Run tests
+npm test
+
+# Build for production
+npm run build
+
+# Eject from Create React App
+npm run eject
+```
+
+### **Code Organization**
+
+#### **File Structure**
+```
+src/
+├── App.js              # Main application component
+├── App.css             # Main styles
+├── index.js            # Application entry point
+├── index.css           # Global styles
+└── components/         # Reusable components (if any)
+```
+
+#### **Component Patterns**
+```javascript
+// Functional components with hooks
+function App() {
+  const [state, setState] = useState(initialState);
   
-Quality Settings:
-  - Resolution: 1024x1024 (optimized square format)
-  - Quality: High (professional-grade output)
+  useEffect(() => {
+    // Side effects
+  }, [dependencies]);
+  
+  const handleEvent = useCallback(() => {
+    // Event handlers
+  }, [dependencies]);
+  
+  return (
+    <div className="app">
+      {/* JSX */}
+    </div>
+  );
+}
 ```
-
----
-
-## 🎯 Latest Updates & Features
-
-### **v3.0 - Professional Infographic Suite** 🆕
-```diff
-+ ✅ Three distinct infographic styles (Enhanced, Alternative, Dashboard)
-+ ✅ 1024x1024 square format for optimal display
-+ ✅ Smart background theming based on document content
-+ ✅ Professional title positioning and typography
-+ ✅ Comprehensive data extraction (stats, processes, findings, impacts)
-+ ✅ Enhanced visual design requirements and layouts
-+ ✅ Improved content parsing and fallback systems
-```
-
-### **v2.1 - Enhanced UI/UX** 
-```diff
-+ ✅ Dark/Light theme toggle with persistent settings
-+ ✅ Bulk chat deletion with confirmation modals
-+ ✅ File management with individual file deletion
-+ ✅ Real-time follow-up question suggestions
-+ ✅ Enhanced error handling and user feedback
-+ ✅ Responsive design for all screen sizes
-```
-
-### **v2.0 - Core Infrastructure**
-```diff
-+ ✅ SQLite database with foreign key cascading
-+ ✅ Professional chat interface with message editing
-+ ✅ Secure file upload and storage system
-+ ✅ Runtime OpenAI API key configuration
-+ ✅ PDF text extraction and processing pipeline
-+ ✅ RESTful API design with comprehensive endpoints
-```
-
----
-
-## 🔗 API Endpoints
-
-### **Chat Management**
-```http
-GET    /chats                    # Retrieve all chats
-POST   /chats                    # Create new chat
-PUT    /chats/:chatId            # Rename chat
-DELETE /chats/:chatId            # Delete chat
-POST   /chats/:chatId/messages   # Save messages
-```
-
-### **File Operations**
-```http
-POST   /upload/:chatId           # Upload PDF/image
-GET    /chats/:chatId/pdfs       # Get chat files
-DELETE /files/:fileId            # Delete file
-```
-
-### **AI Services**
-```http
-POST   /api/ask                  # Q&A with context
-POST   /api/generate-infographic # Generate infographics
-POST   /api/set-openai-key       # Configure API key
-```
-
----
-
-## 📊 Performance Metrics
-
-### **Processing Capabilities**
-- **PDF Processing**: Up to 6,000 characters for context
-- **Response Time**: 2-5 seconds for Q&A
-- **Infographic Generation**: 30-60 seconds for 3 styles
-- **File Size Support**: Up to 50MB uploads
-- **Concurrent Users**: Scalable with Express.js
-
-### **Quality Assurance**
-- **Text Extraction**: 99%+ accuracy with pdf-parse
-- **AI Response Quality**: Enhanced with document context
-- **Infographic Resolution**: Professional 1024x1024 output
-- **Error Handling**: Comprehensive try-catch with user feedback
-
----
-
-## 🔒 Security & Privacy
-
-### **Data Protection**
-- ✅ **Local Storage**: All files stored locally, not in cloud
-- ✅ **API Key Security**: Runtime configuration, not stored in code
-- ✅ **File Isolation**: Each chat has isolated file storage
-- ✅ **Database Security**: SQLite with proper foreign key constraints
 
 ### **Best Practices**
-- ✅ Input validation and sanitization
-- ✅ Error handling without information leakage  
-- ✅ File type restrictions and size limits
-- ✅ Secure file path handling
+
+#### **Performance Optimization**
+```javascript
+// Memoized callbacks
+const handleSend = useCallback(async (customInput) => {
+  // Implementation
+}, [dependencies]);
+
+// Conditional rendering
+{activeChat && (
+  <div className="chat-content">
+    {/* Content */}
+  </div>
+)}
+```
+
+#### **Error Handling**
+```javascript
+// Try-catch in async functions
+try {
+  const response = await fetch(url);
+  const data = await response.json();
+  setState(data);
+} catch (error) {
+  setError("Failed to load data");
+  console.error("Error:", error);
+}
+```
 
 ---
 
-## 🤝 Contributing
+## 🐛 Common Issues
 
-### **Development Setup**
-```bash
-# Fork the repository
-git fork <repository-url>
+### **CORS Errors**
+- Make sure the backend CORS is configured to allow requests from `http://localhost:3000`
 
-# Create feature branch
-git checkout -b feature/amazing-feature
+### **API Connection Issues**
+```javascript
+// Check if backend is running on correct port
+const API_BASE_URL = 'http://localhost:5000';
 
-# Make changes and commit
-git commit -m "Add amazing feature"
-
-# Push to branch
-git push origin feature/amazing-feature
-
-# Open Pull Request
+// Test connection
+fetch(`${API_BASE_URL}/chats`)
+  .then(response => response.json())
+  .catch(error => console.error('API Error:', error));
 ```
 
-### **Code Standards**
-- ✅ ESLint configuration for consistent code style
-- ✅ React best practices with hooks and functional components
-- ✅ Comprehensive error handling in backend
-- ✅ Responsive design principles
-- ✅ Accessibility considerations
+### **File Upload Issues**
+```javascript
+// Check file size and type
+const maxFileSize = 50 * 1024 * 1024; // 50MB
+const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+
+if (file.size > maxFileSize) {
+  setError("File too large");
+  return;
+}
+```
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is open source and available under the **MIT License**.
 
 ---
 
-## 🙏 Acknowledgments
+## 🤝 Contributing
 
-- **OpenAI** for providing advanced AI models
-- **React Team** for the excellent frontend framework
-- **Express.js** for the robust backend framework
-- **SQLite** for reliable local database storage
-- **PDF-Parse** for efficient document processing
+### **Frontend Development Guidelines**
+
+- ✅ Use functional components with hooks
+- ✅ Implement proper error boundaries
+- ✅ Follow React best practices
+- ✅ Use CSS variables for theming
+- ✅ Ensure responsive design
+- ✅ Add proper accessibility attributes
+- ✅ Optimize for performance
+
+### **Code Example**
+
+```javascript
+// Example of proper component structure
+const ChatItem = ({ chat, isActive, onClick }) => {
+  const handleClick = useCallback(() => {
+    onClick(chat.id);
+  }, [chat.id, onClick]);
+
+  return (
+    <div 
+      className={`chat-item ${isActive ? 'active' : ''}`}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+    >
+      <span className="chat-title">{chat.title}</span>
+    </div>
+  );
+};
+```
 
 ---
 
 <div align="center">
 
-### 🌟 **Ready to transform your research workflow?**
+### 🎨 **Frontend Ready**
 
-**[Get Started](#-getting-started)** • **[View Demo](#-usage-guide)** • **[Report Issues](issues)** • **[Request Features](issues)**
+**[UI Features](#-what-youll-find-here)** • **[Component Architecture](#-how-its-built)** • **[Styling System](#-styling-system)**
 
-Made with ❤️ for researchers, analysts, and knowledge workers worldwide.
+Built with React 19, modern CSS, and professional UI/UX design.
 
 </div>
